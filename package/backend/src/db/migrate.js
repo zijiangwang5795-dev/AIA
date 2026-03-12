@@ -149,6 +149,72 @@ CREATE TABLE IF NOT EXISTS friend_privacy (
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── 订阅计划 ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS plans (
+  id              VARCHAR(20) PRIMARY KEY,
+  name            VARCHAR(50) NOT NULL,
+  price_cny       DECIMAL(10,2) DEFAULT 0,
+  price_usd       DECIMAL(10,4) DEFAULT 0,
+  monthly_ai_calls INT DEFAULT 100,   -- -1 = 无限制
+  max_skills      INT DEFAULT 5,      -- -1 = 无限制
+  max_memory_mb   INT DEFAULT 50,
+  features        JSONB DEFAULT '{}',
+  is_active       BOOLEAN DEFAULT TRUE,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── 用户订阅 ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_subscriptions (
+  id                      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id                 UUID REFERENCES users(id) ON DELETE CASCADE,
+  plan_id                 VARCHAR(20) REFERENCES plans(id),
+  status                  VARCHAR(20) DEFAULT 'active', -- active/expired/cancelled/trial
+  period_start            TIMESTAMPTZ DEFAULT NOW(),
+  period_end              TIMESTAMPTZ,
+  payment_method          VARCHAR(30),
+  external_subscription_id VARCHAR(100),
+  created_at              TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id)  -- 每用户只有一条活跃订阅
+);
+
+-- ── 月度用量汇总（快速查询配额）────────────────────────
+CREATE TABLE IF NOT EXISTS monthly_usage (
+  user_id      UUID REFERENCES users(id) ON DELETE CASCADE,
+  year_month   VARCHAR(7) NOT NULL,  -- '2026-03'
+  ai_calls     INT DEFAULT 0,
+  input_tokens BIGINT DEFAULT 0,
+  output_tokens BIGINT DEFAULT 0,
+  cost_usd     DECIMAL(10,4) DEFAULT 0,
+  PRIMARY KEY(user_id, year_month)
+);
+CREATE INDEX IF NOT EXISTS idx_monthly_usage_user ON monthly_usage(user_id, year_month DESC);
+
+-- ── 用户反馈 ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS feedback (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id      UUID REFERENCES users(id) ON DELETE SET NULL,
+  type         VARCHAR(20) DEFAULT 'general',  -- bug/feature/general
+  content      TEXT NOT NULL,
+  contact_info VARCHAR(100),
+  app_version  VARCHAR(20),
+  platform     VARCHAR(20) DEFAULT 'web',
+  status       VARCHAR(20) DEFAULT 'open',  -- open/processing/resolved
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id, created_at DESC);
+
+-- ── 推送令牌（FCM / APNs）───────────────────────────
+CREATE TABLE IF NOT EXISTS push_tokens (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+  token      TEXT NOT NULL,
+  platform   VARCHAR(10) DEFAULT 'android',  -- android/ios/web
+  device_tag VARCHAR(100),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(token)
+);
+CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id);
+
 -- ── AI 审计日志 ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS ai_audit_logs (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -164,6 +230,13 @@ CREATE TABLE IF NOT EXISTS ai_audit_logs (
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_audit_user ON ai_audit_logs(user_id, created_at DESC);
+
+-- ── 插入默认订阅计划 ──────────────────────────────────
+INSERT INTO plans (id, name, price_cny, price_usd, monthly_ai_calls, max_skills, max_memory_mb, features) VALUES
+  ('free',       '免费版', 0,    0,     100,  5,  50,   '{"voice":true,"friends":true,"custom_soul":false,"priority_support":false}'),
+  ('pro',        '专业版', 68,   9.99,  2000, 20, 500,  '{"voice":true,"friends":true,"custom_soul":true,"priority_support":false}'),
+  ('enterprise', '企业版', 688,  99,   -1,   -1,  5000, '{"voice":true,"friends":true,"custom_soul":true,"priority_support":true,"api_access":true}')
+ON CONFLICT (id) DO NOTHING;
 
 -- ── 插入默认技能 ──────────────────────────────────────
 INSERT INTO users (id, display_name, email) VALUES

@@ -202,6 +202,26 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .toggle-slider::before{content:'';position:absolute;width:20px;height:20px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .toggle-wrap input:checked+.toggle-slider{background:var(--ac);border-color:var(--ac)}
 .toggle-wrap input:checked+.toggle-slider::before{left:24px}
+/* ── 订阅计划卡片 ── */
+.plan-card{background:var(--s1);border:2px solid var(--bd);border-radius:18px;padding:18px;cursor:pointer;transition:all .15s;position:relative}
+.plan-card.popular{border-color:var(--ac)}
+.plan-card.current{border-color:var(--cy)}
+.plan-card:active{transform:scale(.98)}
+.plan-badge{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--ac);color:#fff;font-size:11px;font-weight:700;padding:2px 12px;border-radius:10px;white-space:nowrap}
+.plan-price{font-size:28px;font-weight:800;color:var(--tx);margin:8px 0 4px}
+.plan-price span{font-size:14px;font-weight:400;color:var(--t2)}
+.plan-feature{font-size:13px;color:var(--t2);padding:3px 0;display:flex;align-items:center;gap:6px}
+.plan-feature.ok{color:var(--ok)}
+.plan-btn{width:100%;padding:12px;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;margin-top:14px;transition:all .15s}
+.plan-btn.pri{background:var(--ac);color:#fff}
+.plan-btn.sec{background:var(--s3);color:var(--t2)}
+.plan-btn.cur{background:var(--s3);color:var(--cy);cursor:default}
+/* ── 反馈类型按钮 ── */
+.fb-type-btn{padding:8px 16px;background:var(--s3);border:1.5px solid var(--bd);border-radius:20px;font-size:13px;color:var(--t2);cursor:pointer;transition:all .15s}
+.fb-type-btn.selected{border-color:var(--ac);color:var(--ac);background:rgba(124,111,255,.1)}
+/* ── 用量历史行 ── */
+.usage-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--bd)}
+.usage-row:last-child{border-bottom:none}
 @keyframes pgin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 .pad{padding:16px}
@@ -788,6 +808,23 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
         </div>
       </div>
 
+      <div class="more-section-label">订阅与支持</div>
+      <div class="card" style="padding:0;margin-bottom:16px">
+        <div class="more-row" onclick="openSubscriptionPage()">
+          <div class="mr-icon" style="background:rgba(61,255,158,.1)">💎</div>
+          <div class="mr-body">
+            <div class="mr-name">我的订阅</div>
+            <div class="mr-sub" id="subStatusRow">免费版 · 查看用量</div>
+          </div>
+          <div class="mr-right">›</div>
+        </div>
+        <div class="more-row" onclick="gsp('feedback')">
+          <div class="mr-icon" style="background:rgba(255,208,96,.1)">💬</div>
+          <div class="mr-body"><div class="mr-name">帮助与反馈</div><div class="mr-sub">问题报告 · 功能建议</div></div>
+          <div class="mr-right">›</div>
+        </div>
+      </div>
+
       <div class="more-section-label">账号</div>
       <div class="card" style="padding:0;margin-bottom:80px">
         <div class="more-row" onclick="gsp('auth')">
@@ -1240,6 +1277,95 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- SUBSCRIPTION PAGE                            -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="page" id="page-subscription">
+    <div class="subpage-back" onclick="gp('more')">‹ 更多</div>
+    <div class="pad" style="padding-top:12px">
+      <div class="pgtitle" style="margin-bottom:2px">我的订阅</div>
+      <div class="pgsub" style="margin-bottom:20px">管理计划与月度用量</div>
+
+      <!-- 当前用量卡片 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="ctitle">本月 AI 调用</div>
+        <div style="display:flex;align-items:center;gap:12px;margin:12px 0 8px">
+          <div style="flex:1">
+            <div style="height:8px;background:var(--s3);border-radius:4px;overflow:hidden">
+              <div id="subUsageBar" style="height:100%;background:linear-gradient(90deg,var(--ac),var(--cy));border-radius:4px;width:0%;transition:width .6s ease"></div>
+            </div>
+          </div>
+          <div id="subUsageText" style="font-size:13px;color:var(--t2);white-space:nowrap">0 / 100</div>
+        </div>
+        <div id="subUsageNote" style="font-size:12px;color:var(--t3)">剩余用量充足</div>
+      </div>
+
+      <!-- 当前计划 -->
+      <div class="card" style="margin-bottom:16px" id="subCurrentCard">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div id="subPlanName" style="font-size:18px;font-weight:700;color:var(--tx)">免费版</div>
+            <div id="subPlanExpiry" style="font-size:12px;color:var(--t2);margin-top:4px"></div>
+          </div>
+          <div id="subPlanBadge" style="background:var(--s3);padding:6px 14px;border-radius:20px;font-size:13px;color:var(--t2)">FREE</div>
+        </div>
+      </div>
+
+      <!-- 计划对比 -->
+      <div class="ctitle" style="margin-bottom:12px">选择计划</div>
+      <div id="subPlansContainer" style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px">
+        <!-- 动态渲染 -->
+      </div>
+
+      <!-- 历史用量 -->
+      <div class="ctitle" style="margin-bottom:12px">近期用量</div>
+      <div class="card" id="subHistoryCard" style="padding:0;margin-bottom:80px">
+        <div id="subHistoryList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- FEEDBACK PAGE                                -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div class="page" id="page-feedback">
+    <div class="subpage-back" onclick="gp('more')">‹ 更多</div>
+    <div class="pad" style="padding-top:12px">
+      <div class="pgtitle" style="margin-bottom:2px">帮助与反馈</div>
+      <div class="pgsub" style="margin-bottom:20px">我们会认真阅读每一条反馈</div>
+
+      <!-- 反馈类型 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="ctitle" style="margin-bottom:12px">反馈类型</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div class="fb-type-btn selected" id="fbt-general" onclick="selectFbType('general')">💬 一般反馈</div>
+          <div class="fb-type-btn" id="fbt-bug" onclick="selectFbType('bug')">🐛 问题报告</div>
+          <div class="fb-type-btn" id="fbt-feature" onclick="selectFbType('feature')">✨ 功能建议</div>
+        </div>
+      </div>
+
+      <!-- 反馈内容 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="ctitle" style="margin-bottom:10px">详细描述</div>
+        <textarea id="fbContent" placeholder="请详细描述你的问题或建议，这将帮助我们更快地改进产品…"
+          style="width:100%;min-height:120px;background:var(--s3);border:1px solid var(--bd);border-radius:10px;color:var(--tx);font-size:14px;padding:12px;box-sizing:border-box;resize:vertical;font-family:inherit;line-height:1.6"></textarea>
+        <div style="text-align:right;font-size:12px;color:var(--t3);margin-top:6px" id="fbCharCount">0 / 2000</div>
+      </div>
+
+      <!-- 联系方式 -->
+      <div class="card" style="margin-bottom:24px">
+        <div class="ctitle" style="margin-bottom:10px">联系方式（选填）</div>
+        <input id="fbContact" type="text" placeholder="邮箱或手机号，方便我们回复你"
+          style="width:100%;background:var(--s3);border:1px solid var(--bd);border-radius:10px;color:var(--tx);font-size:14px;padding:12px;box-sizing:border-box;font-family:inherit">
+      </div>
+
+      <!-- 提交 -->
+      <button onclick="submitFeedback()" style="width:100%;padding:16px;background:var(--ac);border:none;border-radius:14px;color:#fff;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:80px">
+        提交反馈
+      </button>
+    </div>
+  </div>
+
   </div><!-- /scroll -->
 
   <!-- BOTTOM NAV -->
@@ -1408,6 +1534,8 @@ function rp(pg){
   if(pg==='market')rmarket();
   if(pg==='soul')initSoulPage();
   if(pg==='privacy')loadPrivacySettings();
+  if(pg==='subscription')initSubscriptionPage();
+  if(pg==='feedback')initFeedbackPage();
 }
 function renderAll(){rdash();rtasks();rskills();rmem();raudit();rauth();rmodels();rrules([]);rmarket();rfriends();}
 
@@ -1458,6 +1586,27 @@ async function apiCall(method, path, body) {
   });
   if (resp.status === 204) return {};
   const data = await resp.json();
+  if (resp.status === 429 && data.error === 'quota_exceeded') {
+    showQuotaExceededDialog(data);
+    throw new Error('quota_exceeded');
+  }
+  if (!resp.ok) throw new Error(data.error || data.message || `API Error ${resp.status}`);
+  return data;
+}
+
+// apiFetch：REST fetch 封装，支持自定义 options（供订阅/反馈页使用）
+async function apiFetch(path, options = {}) {
+  const resp = await fetch(`${API_BASE}${path}`, {
+    method: options.method || 'GET',
+    headers: { ...Auth.headers(), ...(options.headers || {}) },
+    body: options.body || undefined,
+  });
+  if (resp.status === 204) return {};
+  const data = await resp.json();
+  if (resp.status === 429 && data.error === 'quota_exceeded') {
+    showQuotaExceededDialog(data);
+    throw new Error('quota_exceeded');
+  }
   if (!resp.ok) throw new Error(data.error || data.message || `API Error ${resp.status}`);
   return data;
 }
@@ -3036,6 +3185,178 @@ function rdash() {
   const n = S.tasks.filter(t => t.status === 'pending').length;
   document.getElementById('taskCount').textContent = n;
   document.getElementById('tbadge').textContent = n;
+}
+
+// ══════════════════ SUBSCRIPTION PAGE
+let subState = { plans: [], current: null, usage: null };
+
+function openSubscriptionPage() {
+  gsp('subscription');
+}
+
+async function initSubscriptionPage() {
+  try {
+    const [plansRes, subRes] = await Promise.all([
+      apiFetch('/api/plans'),
+      apiFetch('/api/subscription'),
+    ]);
+    subState.plans = plansRes.plans || [];
+    subState.current = subRes.plan || { id: 'free', name: '免费版' };
+    subState.usage = subRes.usage || { used: 0, limit: 100, pct: 0 };
+    renderSubscriptionPage();
+    // 同步"更多"页的状态行
+    const row = document.getElementById('subStatusRow');
+    if (row) row.textContent = `${subState.current.name} · ${subState.usage.used}/${subState.usage.limit === -1 ? '∞' : subState.usage.limit} 次`;
+  } catch (e) {
+    console.warn('Subscription load failed:', e.message);
+  }
+}
+
+function renderSubscriptionPage() {
+  const { current, usage, plans } = subState;
+
+  // 用量进度条
+  const pct = usage.limit === -1 ? 0 : usage.pct;
+  document.getElementById('subUsageBar').style.width = pct + '%';
+  document.getElementById('subUsageText').textContent =
+    `${usage.used} / ${usage.limit === -1 ? '无限' : usage.limit}`;
+  document.getElementById('subUsageNote').textContent =
+    pct >= 90 ? '⚠️ 用量接近上限，建议升级计划' :
+    pct >= 60 ? `本月已用 ${pct}%` : '剩余用量充足';
+  document.getElementById('subUsageNote').style.color =
+    pct >= 90 ? 'var(--wn)' : 'var(--t3)';
+
+  // 当前计划信息
+  document.getElementById('subPlanName').textContent = current.name;
+  const badge = document.getElementById('subPlanBadge');
+  badge.textContent = current.id.toUpperCase();
+  badge.style.background = current.id === 'enterprise' ? 'rgba(245,200,66,.2)' :
+    current.id === 'pro' ? 'rgba(124,111,255,.2)' : 'var(--s3)';
+  badge.style.color = current.id === 'enterprise' ? 'var(--gold)' :
+    current.id === 'pro' ? 'var(--ac)' : 'var(--t2)';
+
+  // 计划卡片列表
+  const container = document.getElementById('subPlansContainer');
+  container.innerHTML = plans.map(plan => {
+    const isCurrent = plan.id === current.id;
+    const features = plan.features || {};
+    return `<div class="plan-card ${plan.id === 'pro' ? 'popular' : ''} ${isCurrent ? 'current' : ''}">
+      ${plan.id === 'pro' ? '<div class="plan-badge">最受欢迎</div>' : ''}
+      <div style="font-size:15px;font-weight:700;color:var(--tx)">${plan.name}</div>
+      <div class="plan-price">
+        ${plan.price_cny > 0 ? `¥${plan.price_cny}<span>/月</span>` : '<span style="font-size:18px;font-weight:700;color:var(--ok)">免费</span>'}
+      </div>
+      <div class="plan-feature ok">✓ ${plan.monthly_ai_calls === -1 ? '无限' : plan.monthly_ai_calls} 次 AI 调用/月</div>
+      <div class="plan-feature ok">✓ ${plan.max_skills === -1 ? '无限' : plan.max_skills} 个自定义技能</div>
+      <div class="plan-feature ${features.custom_soul ? 'ok' : ''}">${features.custom_soul ? '✓' : '✗'} 自定义灵魂人格</div>
+      <div class="plan-feature ${features.priority_support ? 'ok' : ''}">${features.priority_support ? '✓' : '✗'} 优先客服支持</div>
+      ${features.api_access ? '<div class="plan-feature ok">✓ API 开发者接口</div>' : ''}
+      <button class="plan-btn ${isCurrent ? 'cur' : plan.price_cny > 0 ? 'pri' : 'sec'}"
+        onclick="${isCurrent ? '' : `upgradePlan('${plan.id}')`}"
+        ${isCurrent ? 'disabled' : ''}>
+        ${isCurrent ? '当前计划' : plan.price_cny > 0 ? `升级至 ${plan.name}` : '使用免费版'}
+      </button>
+    </div>`;
+  }).join('');
+
+  // 加载历史用量
+  loadUsageHistory();
+}
+
+async function loadUsageHistory() {
+  try {
+    const res = await apiFetch('/api/subscription/usage-detail');
+    const list = document.getElementById('subHistoryList');
+    if (!res.history?.length) {
+      list.innerHTML = '<div style="padding:16px;color:var(--t3);font-size:13px">暂无历史记录</div>';
+      return;
+    }
+    list.innerHTML = res.history.map(h => `
+      <div class="usage-row">
+        <div>
+          <div style="font-size:14px;color:var(--tx)">${h.year_month}</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:2px">${h.ai_calls} 次调用</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:14px;color:var(--tx)">$${parseFloat(h.cost_usd).toFixed(4)}</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:2px">${h.input_tokens + h.output_tokens} tokens</div>
+        </div>
+      </div>`).join('');
+  } catch (e) { /* ignore */ }
+}
+
+async function upgradePlan(planId) {
+  try {
+    const res = await apiFetch('/api/subscription/upgrade', {
+      method: 'POST',
+      body: JSON.stringify({ planId, paymentMethod: 'mock' }),
+    });
+    toast(res.message || '升级成功', 'success');
+    await initSubscriptionPage();
+  } catch (e) {
+    toast('升级失败：' + e.message, 'error');
+  }
+}
+
+// ══════════════════ FEEDBACK PAGE
+let fbType = 'general';
+
+function initFeedbackPage() {
+  fbType = 'general';
+  document.querySelectorAll('.fb-type-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('fbt-general').classList.add('selected');
+  document.getElementById('fbContent').value = '';
+  document.getElementById('fbContact').value = '';
+  document.getElementById('fbCharCount').textContent = '0 / 2000';
+  // 字数统计
+  document.getElementById('fbContent').oninput = function() {
+    document.getElementById('fbCharCount').textContent = `${this.value.length} / 2000`;
+  };
+}
+
+function selectFbType(type) {
+  fbType = type;
+  document.querySelectorAll('.fb-type-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById(`fbt-${type}`)?.classList.add('selected');
+}
+
+async function submitFeedback() {
+  const content = document.getElementById('fbContent').value.trim();
+  const contact = document.getElementById('fbContact').value.trim();
+  if (content.length < 5) { toast('请输入至少 5 个字的反馈内容', 'error'); return; }
+
+  try {
+    await apiFetch('/api/feedback', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: fbType,
+        content,
+        contactInfo: contact || undefined,
+        platform: navigator.userAgent.includes('AIAssistantApp') ? 'android' : 'web',
+      }),
+    });
+    toast('感谢反馈！我们会认真查看', 'success');
+    document.getElementById('fbContent').value = '';
+    document.getElementById('fbContact').value = '';
+    setTimeout(() => gp('more'), 1200);
+  } catch (e) {
+    toast('提交失败：' + e.message, 'error');
+  }
+}
+
+// ══════════════════ QUOTA EXCEEDED HANDLER
+// 当 AI 调用返回 429 配额超限时，展示升级提示
+function showQuotaExceededDialog(resp) {
+  const used = resp?.used || 0;
+  const limit = resp?.limit || 100;
+  const plan = resp?.plan || 'free';
+  toast(`本月 AI 调用已达上限（${used}/${limit} 次）`, 'error');
+  // 2 秒后自动跳转订阅页
+  setTimeout(() => {
+    if (confirm(`本月 ${limit} 次免费调用已用完。\n升级专业版可享每月 2000 次调用。\n\n是否立即查看升级方案？`)) {
+      openSubscriptionPage();
+    }
+  }, 500);
 }
 </script>
 </body>
