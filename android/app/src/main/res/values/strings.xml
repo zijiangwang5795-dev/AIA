@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AI 助手</string>
+
+    <!-- Notification -->
+    <string name="notif_channel_persistent_name">常驻通知</string>
+    <string name="notif_channel_persistent_desc">用于快速访问语音和任务功能的常驻通知</string>
+    <string name="notif_channel_alerts_name">提醒通知</string>
+    <string name="notif_channel_alerts_desc">任务提醒和重要通知</string>
+    <string name="notif_channel_widget_name">小组件同步</string>
+    <string name="notif_channel_widget_desc">用于桌面小组件数据同步的静默通知</string>
+    <string name="notif_title">AI 助手</string>
+    <string name="notif_text_ready">准备就绪，轻触开始语音</string>
+    <string name="notif_action_voice">🎙️ 语音</string>
+    <string name="notif_action_tasks">✅ 任务</string>
+
+    <!-- Widget -->
+    <string name="widget_label">AI 助手</string>
+    <string name="widget_description">显示任务状态并提供快速操作入口</string>
+    <string name="widget_title">AI 助手</string>
+    <string name="widget_status_ready">就绪</string>
+    <string name="widget_status_busy">处理中…</string>
+    <string name="widget_task_count_format">%d 项待处理</string>
+    <string name="widget_no_tasks">暂无待处理任务</string>
+    <string name="widget_btn_voice">🎙️ 语音</string>
+    <string name="widget_btn_tasks">📋 任务</string>
+    <string name="widget_btn_refresh">⟳</string>
+    <string name="widget_sync_format">%s 同步</string>
+    <string name="widget_not_synced">未同步</string>
+
+    <!-- Main UI -->
+    <string name="loading">加载中…</string>
+    <string name="back">返回</string>
+    <string name="ok">确认</string>
+    <string name="cancel">取消</string>
+</resources>

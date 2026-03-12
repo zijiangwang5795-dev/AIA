@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand colors -->
+    <color name="accent_purple">#7B5EA7</color>
+    <color name="accent_blue">#3DFF9E</color>
+    <color name="ok_green">#4CAF50</color>
+    <color name="warn_orange">#FF9800</color>
+    <color name="error_red">#F44336</color>
+
+    <!-- Background -->
+    <color name="bg_dark">#060F1E</color>
+    <color name="bg_card">#0D1929</color>
+    <color name="bg_surface">#111D30</color>
+
+    <!-- Text -->
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#B3FFFFFF</color>
+    <color name="text_tertiary">#66FFFFFF</color>
+
+    <!-- Border / Divider -->
+    <color name="border_color">#30303060</color>
+    <color name="divider_color">#1AFFFFFF</color>
+
+    <!-- Widget specific -->
+    <color name="widget_bg">#E8060F1E</color>
+    <color name="widget_btn_bg">#1A2A2A50</color>
+    <color name="widget_status_bg">#143DFF9E</color>
+
+    <!-- Notification icon tint (must be white for Android system) -->
+    <color name="notif_icon_color">#FFFFFFFF</color>
+
+    <!-- System / Material -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
