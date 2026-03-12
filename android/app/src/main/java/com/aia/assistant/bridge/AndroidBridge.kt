@@ -9,6 +9,7 @@ import android.speech.SpeechRecognizer
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.aia.assistant.MainActivity
+import com.aia.assistant.push.FCMService
 import com.aia.assistant.util.PrefHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -86,10 +87,16 @@ class AndroidBridge(
         updateWidget()
     }
 
-    /** 保存 Access Token 到 SharedPreferences（跨进程共享给小组件）*/
+    /** 保存 Access Token 到 SharedPreferences（跨进程共享给小组件）
+     *  同时触发 FCM Token 注册（首次登录后确保推送令牌已上报）
+     */
     @JavascriptInterface
     fun saveToken(token: String) {
         PrefHelper.saveToken(context, token)
+        // 登录成功后注册推送令牌
+        if (token.isNotBlank()) {
+            FCMService.registerAfterLogin(context)
+        }
     }
 
     @JavascriptInterface

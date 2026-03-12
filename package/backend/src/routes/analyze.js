@@ -2,12 +2,13 @@
 const { layer1Process } = require('../brain/layer1');
 const { runAgent } = require('../brain/layer2/agentExecutor');
 const { optionalAuth } = require('../auth/middleware');
+const { checkQuota, incrementUsage } = require('../middleware/quota');
 
 module.exports = async function analyzeRoutes(app) {
 
   // ── 核心分析接口（SSE 流式）──────────────────────
   app.post('/analyze', {
-    preHandler: [optionalAuth],
+    preHandler: [optionalAuth, checkQuota],
   }, async (req, reply) => {
     const { text, skillType } = req.body || {};
 
@@ -58,6 +59,9 @@ module.exports = async function analyzeRoutes(app) {
         send,
       });
 
+      // 调用完成后异步增加月度计数（不阻塞响应）
+      incrementUsage(userId).catch(() => {});
+
     } catch (err) {
       send({ type: 'error', message: err.message || 'Internal server error' });
       app.log.error(err);
@@ -71,7 +75,7 @@ module.exports = async function analyzeRoutes(app) {
 
   // ── 技能执行接口（SSE 流式）──────────────────────
   app.post('/skills/:skillId/run', {
-    preHandler: [optionalAuth],
+    preHandler: [optionalAuth, checkQuota],
   }, async (req, reply) => {
     const { skillId } = req.params;
     const { input } = req.body || {};
@@ -117,6 +121,8 @@ module.exports = async function analyzeRoutes(app) {
         intent: skill.builtin_type || layer1.intent,
         send,
       });
+
+      incrementUsage(userId).catch(() => {});
 
     } catch (err) {
       send({ type: 'error', message: err.message });

@@ -22,6 +22,7 @@ object PrefHelper {
     private const val KEY_WIDGET_TASKS   = "widget_task_count"
     private const val KEY_WIDGET_STATUS  = "widget_status"
     private const val KEY_LAST_SYNC      = "last_sync_time"
+    private const val KEY_FCM_TOKEN      = "fcm_token"
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -74,4 +75,12 @@ object PrefHelper {
 
     fun getLastSyncTime(context: Context): String =
         prefs(context).getString(KEY_LAST_SYNC, "--:--") ?: "--:--"
+
+    // ── FCM Token ─────────────────────────────────────
+    fun saveFcmToken(context: Context, token: String) {
+        prefs(context).edit().putString(KEY_FCM_TOKEN, token).apply()
+    }
+
+    fun getFcmToken(context: Context): String =
+        prefs(context).getString(KEY_FCM_TOKEN, "") ?: ""
 }

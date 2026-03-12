@@ -29,13 +29,16 @@ app.get('/health', async () => ({
 }));
 
 // ── 路由注册 ──────────────────────────────────────────
-app.register(require('./routes/auth'),    { prefix: '/auth' });
-app.register(require('./routes/analyze'), { prefix: '/api' });
-app.register(require('./routes/tasks'),   { prefix: '/api' });
-app.register(require('./routes/skills'),  { prefix: '/api' });
-app.register(require('./routes/memory'),  { prefix: '/api' });
-app.register(require('./routes/audit'),   { prefix: '/api' });
-app.register(require('./routes/friends'), { prefix: '/api' });
+app.register(require('./routes/auth'),     { prefix: '/auth' });
+app.register(require('./routes/analyze'),  { prefix: '/api' });
+app.register(require('./routes/tasks'),    { prefix: '/api' });
+app.register(require('./routes/skills'),   { prefix: '/api' });
+app.register(require('./routes/memory'),   { prefix: '/api' });
+app.register(require('./routes/audit'),    { prefix: '/api' });
+app.register(require('./routes/friends'),  { prefix: '/api' });
+app.register(require('./routes/billing'),  { prefix: '/api' });
+app.register(require('./routes/feedback'), { prefix: '/api' });
+app.register(require('./routes/push'),     { prefix: '/api' });
 
 // ── 静态前端（可选）──────────────────────────────────
 // 如果把前端 HTML 放在 public/ 目录下，可以直接托管
