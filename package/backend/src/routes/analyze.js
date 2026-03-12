@@ -1,0 +1,144 @@
+'use strict';
+const { layer1Process } = require('../brain/layer1');
+const { runAgent } = require('../brain/layer2/agentExecutor');
+const { optionalAuth } = require('../auth/middleware');
+
+module.exports = async function analyzeRoutes(app) {
+
+  // ── 核心分析接口（SSE 流式）──────────────────────
+  app.post('/analyze', {
+    preHandler: [optionalAuth],
+  }, async (req, reply) => {
+    const { text, skillType } = req.body || {};
+
+    if (!text || !text.trim()) {
+      return reply.code(400).send({ error: 'text is required' });
+    }
+
+    const userId = req.userId;
+
+    // 设置 SSE Headers
+    reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
+    reply.raw.setHeader('X-Accel-Buffering', 'no');  // 禁止 Nginx 缓冲
+    reply.raw.setHeader('Connection', 'keep-alive');
+    reply.raw.setHeader('Access-Control-Allow-Origin', '*');
+
+    // SSE 发送函数
+    const send = (data) => {
+      try {
+        const event = data.type || 'message';
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      } catch { /* 客户端断开时忽略 */ }
+    };
+
+    // 发送心跳防止超时
+    const heartbeat = setInterval(() => {
+      try { reply.raw.write(': ping\n\n'); } catch { clearInterval(heartbeat); }
+    }, 15000);
+
+    try {
+      // ── 第一层大脑（确定性处理，~50ms）────────────
+      send({ type: 'step', step: 1, label: '第一层：意图分析...' });
+      const layer1 = await layer1Process(text.trim(), userId, { skillType });
+
+      send({
+        type: 'step', step: 2,
+        label: `路由完成 → ${layer1.selectedModel}（${layer1.intent}）[${layer1.processingMs}ms]`,
+      });
+
+      // ── 第二层大脑（大模型推理）─────────────────────
+      await runAgent({
+        userId,
+        text: text.trim(),
+        toolNames: layer1.tools,
+        model: layer1.selectedModel,
+        routingRule: layer1.selectedRule,
+        intent: layer1.intent,
+        send,
+      });
+
+    } catch (err) {
+      send({ type: 'error', message: err.message || 'Internal server error' });
+      app.log.error(err);
+    } finally {
+      clearInterval(heartbeat);
+      try { reply.raw.end(); } catch { /* already ended */ }
+    }
+
+    return reply;
+  });
+
+  // ── 技能执行接口（SSE 流式）──────────────────────
+  app.post('/skills/:skillId/run', {
+    preHandler: [optionalAuth],
+  }, async (req, reply) => {
+    const { skillId } = req.params;
+    const { input } = req.body || {};
+    const userId = req.userId;
+    const { query } = require('../db/client');
+
+    reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
+    reply.raw.setHeader('X-Accel-Buffering', 'no');
+    reply.raw.setHeader('Access-Control-Allow-Origin', '*');
+
+    const send = (data) => {
+      try { reply.raw.write(`event: ${data.type || 'message'}\ndata: ${JSON.stringify(data)}\n\n`); }
+      catch { /* ignore */ }
+    };
+
+    try {
+      // 查找技能
+      const skillRes = await query(
+        `SELECT * FROM skills WHERE id=$1 AND (user_id=$2 OR is_builtin=true)`,
+        [skillId, userId]
+      ).catch(() => ({ rows: [] }));
+
+      const skill = skillRes.rows[0];
+      if (!skill) {
+        send({ type: 'error', message: `Skill not found: ${skillId}` });
+        reply.raw.end();
+        return reply;
+      }
+
+      const layer1 = await layer1Process(
+        input || skill.name,
+        userId,
+        { skillType: skill.builtin_type || 'default' }
+      );
+
+      await runAgent({
+        userId,
+        text: buildSkillGoal(skill, input),
+        toolNames: skill.allowed_tools || layer1.tools,
+        model: skill.model_pref || layer1.selectedModel,
+        routingRule: `skill:${skill.builtin_type}`,
+        intent: skill.builtin_type || layer1.intent,
+        send,
+      });
+
+    } catch (err) {
+      send({ type: 'error', message: err.message });
+    } finally {
+      try { reply.raw.end(); } catch { /* ignore */ }
+    }
+
+    return reply;
+  });
+};
+
+// 根据技能类型构建 Goal 文本
+function buildSkillGoal(skill, input) {
+  const today = new Date().toLocaleDateString('zh-CN');
+  switch (skill.builtin_type) {
+    case 'ai-news':
+      return `搜索整理今天（${today}）最重要的前10条AI行业新闻，按影响力排序，最后调用 create_tasks 生成任务清单`;
+    case 'daily-brief':
+      return `根据用户今日任务清单，生成简洁的工作日报，总结完成情况和未完成任务`;
+    case 'analyze-voice':
+      return `分析以下内容，提取所有任务和待办事项，调用 create_tasks 写入清单：\n${input || ''}`;
+    default:
+      return input || skill.description || skill.name;
+  }
+}

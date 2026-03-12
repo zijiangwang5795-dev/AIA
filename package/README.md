@@ -1,0 +1,255 @@
+# 🤖 AI 助手 — 本地部署指南
+
+完整的「前端 + 后端 + Android」AI 语音助手系统。
+
+---
+
+## 架构一览
+
+```
+📱 Android App (WebView)
+   └── assets/www/index.html  ← 前端 UI
+       ├── AndroidBridge       ← 原生语音识别
+       └── fetch API_BASE      ← 连接后端
+
+🖥️ 后端 (Node.js + Fastify)
+   ├── 第一层大脑：意图分类 + 路由决策（确定性，~50ms）
+   ├── 第二层大脑：ReAct Agent + 流式 SSE 输出
+   ├── 助手人格层：灵魂 + 天赋 + 运行时状态
+   └── 工具：create_tasks / web_search / memory / calculator
+
+🗄️ 数据库
+   ├── PostgreSQL + pgvector（任务 / 记忆 / 情节向量）
+   └── Redis（短期会话记忆）
+```
+
+---
+
+## 快速开始（方式一：Docker）
+
+```bash
+# 1. 克隆项目，进入 backend 目录
+cd backend/
+
+# 2. 配置环境变量
+cp .env.example .env
+# 编辑 .env，填入你的 DEEPSEEK_API_KEY
+
+# 3. 启动所有服务
+docker-compose up -d
+
+# 4. 第一次运行：等待约 30s 后访问
+open http://localhost:3000/health
+```
+
+---
+
+## 快速开始（方式二：手动安装）
+
+### 前置需求
+- Node.js 18+
+- PostgreSQL 14+ with pgvector 扩展
+- Redis 7+
+
+### 安装 pgvector（如果没有）
+```bash
+# macOS
+brew install pgvector
+
+# Ubuntu/Debian
+sudo apt install postgresql-16-pgvector
+
+# 或使用 Docker（只启动数据库）
+docker run -d --name pgvec -p 5432:5432 \
+  -e POSTGRES_PASSWORD=postgres \
+  pgvector/pgvector:pg16
+```
+
+### 后端启动
+```bash
+cd backend/
+
+# 安装依赖
+npm install
+
+# 配置环境
+cp .env.example .env
+vim .env   # 填入 DEEPSEEK_API_KEY 等
+
+# 初始化数据库
+npm run db:migrate
+
+# 开发模式启动（热重载）
+npm run dev
+
+# 生产模式
+npm start
+```
+
+后端启动后：
+- API：`http://localhost:3000`
+- 健康检查：`http://localhost:3000/health`
+
+---
+
+## 前端部署
+
+### 方式 A：浏览器直接打开（最快）
+```bash
+# 打开 frontend/index.html 即可
+# 默认连接 http://localhost:3000
+```
+
+### 方式 B：后端托管（推荐）
+```bash
+# 将前端文件放到 backend/public/ 目录
+cp frontend/index.html backend/public/
+
+# 访问 http://localhost:3000 即可看到前端
+```
+
+### 方式 C：Android 打包
+```bash
+# 将 frontend/index.html 放入 Android 项目
+cp frontend/index.html VoiceTaskApp/app/src/main/assets/www/
+
+# 编辑 index.html，修改 API_BASE 为你的服务器 IP
+# const API_BASE = 'http://192.168.1.xxx:3000';
+
+# 用 Android Studio 构建 APK
+```
+
+---
+
+## 环境变量说明
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `DEEPSEEK_API_KEY` | ✅ | DeepSeek API Key（主要模型） |
+| `OPENAI_API_KEY` | ⚡ | OpenAI Key（gpt-4o-mini + embedding，可选） |
+| `ANTHROPIC_API_KEY` | ⚡ | Claude API Key（可选） |
+| `TAVILY_API_KEY` | ⚡ | 搜索 API（技能执行需要，可选） |
+| `DATABASE_URL` | ✅ | PostgreSQL 连接串 |
+| `REDIS_URL` | ✅ | Redis 连接串 |
+| `JWT_SECRET` | ✅ | JWT 签名密钥（生产环境必须改） |
+| `DEMO_MODE` | - | `true` = 自动 demo 登录，OTP 固定为 123456 |
+
+---
+
+## API 文档
+
+### 认证
+```
+POST /auth/otp/send      { phone }              → { success, expiresIn }
+POST /auth/otp/verify    { phone, code }         → { accessToken, user }
+POST /auth/demo-login    {}                      → { accessToken, user }
+GET  /auth/me            [需要 Bearer Token]     → UserProfile
+```
+
+### 核心功能（SSE 流式）
+```
+POST /api/analyze        { text }               → SSE Stream
+POST /api/skills/:id/run { input? }             → SSE Stream
+```
+
+### 任务
+```
+GET    /api/tasks        ?status=pending|done|all
+POST   /api/tasks        [{ title, priority, category, deadline }]
+PATCH  /api/tasks/:id    { status?, title?, priority? }
+DELETE /api/tasks/:id
+```
+
+### 记忆
+```
+GET    /api/memory/long
+POST   /api/memory/long  { key, value }
+DELETE /api/memory/long/:key
+GET    /api/memory/episodic
+```
+
+### 审计
+```
+GET    /api/audit        ?limit=20
+```
+
+---
+
+## SSE 事件格式
+
+```javascript
+// 分析时，前端监听这些事件：
+event: step        → { step, label }           // 进度更新
+event: text        → { chunk }                 // 流式文字（实时）
+event: tool_start  → { name, args }            // 工具调用开始
+event: tool_done   → { name, result }          // 工具完成
+event: task_extract→ { tasks[], summary }      // 提取到任务
+event: error       → { message }               // 错误
+event: done        → { totalTokens, latencyMs, costUsd, model }
+```
+
+---
+
+## 局域网 Android 访问
+
+手机和电脑在同一 WiFi 下：
+
+1. 查看电脑 IP：
+   ```bash
+   # macOS
+   ipconfig getifaddr en0
+   # Linux
+   ip addr show | grep inet
+   ```
+
+2. 修改前端的 `API_BASE`：
+   ```javascript
+   // 在 index.html 第一行 <script> 中添加：
+   window.API_BASE = 'http://192.168.1.xxx:3000';
+   ```
+
+3. 将修改后的 `index.html` 打包进 Android APK。
+
+---
+
+## 扩展搜索能力
+
+默认搜索演示模式，配置任一即可启用真实搜索：
+
+```bash
+# Tavily（推荐，专为 AI Agent 设计）
+# https://app.tavily.com → 免费 1000 次/月
+TAVILY_API_KEY=tvly-xxxxx
+
+# 或 Serper（Google 搜索结果）
+# https://serper.dev → 免费 2500 次
+SERPER_API_KEY=xxxxx
+```
+
+---
+
+## 项目结构
+
+```
+ai-assistant/
+├── frontend/
+│   └── index.html          # 完整前端（HTML+CSS+JS）
+│
+├── backend/
+│   ├── src/
+│   │   ├── index.js         # Fastify 入口
+│   │   ├── routes/          # API 路由
+│   │   ├── personality/     # 人格层（Soul/Talent/Runtime）
+│   │   ├── brain/
+│   │   │   ├── layer1/      # 确定性引擎
+│   │   │   └── layer2/      # ReAct Agent
+│   │   ├── tools/           # 工具注册表
+│   │   ├── memory/          # 记忆系统（暂用 PostgreSQL）
+│   │   ├── auth/            # JWT + OTP
+│   │   └── db/              # 数据库客户端 + 迁移
+│   ├── .env.example
+│   ├── docker-compose.yml
+│   └── Dockerfile
+│
+└── README.md
+```
