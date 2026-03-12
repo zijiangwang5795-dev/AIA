@@ -9,15 +9,18 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ── 用户 ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
-  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  display_name   VARCHAR(100) NOT NULL DEFAULT 'User',
-  avatar_url     VARCHAR(500),
-  phone          VARCHAR(20) UNIQUE,
-  email          VARCHAR(255) UNIQUE,
-  talent         VARCHAR(50) DEFAULT 'default',
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  display_name    VARCHAR(100) NOT NULL DEFAULT 'User',
+  avatar_emoji    VARCHAR(10) DEFAULT '👤',
+  avatar_url      VARCHAR(500),
+  phone           VARCHAR(20) UNIQUE,
+  email           VARCHAR(255) UNIQUE,
+  talent          VARCHAR(50) DEFAULT 'default',
+  soul_prompt     TEXT,
   preferred_model VARCHAR(50),
-  created_at     TIMESTAMPTZ DEFAULT NOW(),
-  last_login     TIMESTAMPTZ
+  is_searchable   BOOLEAN DEFAULT TRUE,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  last_login      TIMESTAMPTZ
 );
 
 -- ── OAuth 账号绑定 ────────────────────────────────────
@@ -112,6 +115,39 @@ CREATE TABLE IF NOT EXISTS episodic_memories (
 CREATE INDEX IF NOT EXISTS idx_episodic_user ON episodic_memories(user_id);
 -- 向量索引在有数据后创建更有效
 -- CREATE INDEX ON episodic_memories USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- ── 好友关系 ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS friendships (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  requester_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  status       VARCHAR(20) DEFAULT 'pending',
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(requester_id, recipient_id)
+);
+CREATE INDEX IF NOT EXISTS idx_friendships_recipient ON friendships(recipient_id, status);
+
+-- ── 聊天消息 ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS messages (
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  from_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  to_user_id   UUID REFERENCES users(id) ON DELETE CASCADE,
+  content      TEXT NOT NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  read_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(from_user_id, to_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_to   ON messages(to_user_id, created_at DESC);
+
+-- ── 好友隐私设置 ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS friend_privacy (
+  user_id       UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  show_tasks    BOOLEAN DEFAULT FALSE,
+  show_skills   BOOLEAN DEFAULT TRUE,
+  show_activity BOOLEAN DEFAULT TRUE,
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- ── AI 审计日志 ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS ai_audit_logs (

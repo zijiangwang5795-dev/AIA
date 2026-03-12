@@ -111,6 +111,7 @@ async function assembleSystemPrompt(userId, userInput = '') {
         displayName: userRes.rows[0].display_name,
         talent: userRes.rows[0].talent || 'default',
         preferredModel: userRes.rows[0].preferred_model,
+        soulPrompt: userRes.rows[0].soul_prompt,
       };
     }
     const taskRes = await query(
@@ -121,7 +122,8 @@ async function assembleSystemPrompt(userId, userInput = '') {
   } catch { /* 数据库不可用时优雅降级 */ }
 
   const hour = new Date().getHours();
-  const soul = SOUL;
+  // 如果用户自定义了灵魂提示词，使用用户自定义的；否则使用默认
+  const soul = user.soulPrompt ? `${SOUL}\n\n## 用户自定义人格补充\n${user.soulPrompt}` : SOUL;
   const talent = TALENTS[user.talent] || TALENTS['default'];
   const runtime = buildRuntimeContext({ user, pendingTaskCount, hour, errorCount: 0 });
   const memory = await buildMemoryContext(userId);
