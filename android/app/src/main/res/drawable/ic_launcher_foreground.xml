@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon foreground: robot/AI face on transparent bg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outer glow ring -->
+    <path
+        android:fillColor="#207B5EA7"
+        android:pathData="M54,20 A34,34 0 1,1 53.99,20 Z" />
+
+    <!-- Robot head body -->
+    <path
+        android:fillColor="#7B5EA7"
+        android:pathData="M38,35 L70,35 Q73,35 73,38 L73,65 Q73,68 70,68 L38,68 Q35,68 35,65 L35,38 Q35,35 38,35 Z" />
+
+    <!-- Antenna -->
+    <path
+        android:fillColor="#7B5EA7"
+        android:pathData="M54,28 L54,35 M51,28 A3,3 0 1,0 57,28 A3,3 0 1,0 51,28 Z" />
+    <path
+        android:fillColor="#3DFF9E"
+        android:pathData="M51,28 A3,3 0 1,0 57,28 A3,3 0 1,0 51,28 Z" />
+
+    <!-- Left eye -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,44 A5,5 0 1,0 53,44 A5,5 0 1,0 43,44 Z" />
+    <path
+        android:fillColor="#060F1E"
+        android:pathData="M46,44 A2,2 0 1,0 50,44 A2,2 0 1,0 46,44 Z" />
+
+    <!-- Right eye -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,44 A5,5 0 1,0 65,44 A5,5 0 1,0 55,44 Z" />
+    <path
+        android:fillColor="#060F1E"
+        android:pathData="M58,44 A2,2 0 1,0 62,44 A2,2 0 1,0 58,44 Z" />
+
+    <!-- Mouth / speaker grille -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:pathData="M43,57 L65,57" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:pathData="M46,61 L62,61" />
+
+    <!-- Ear bolts -->
+    <path
+        android:fillColor="#5A3E8A"
+        android:pathData="M32,45 L35,45 L35,55 L32,55 Q30,55 30,53 L30,47 Q30,45 32,45 Z" />
+    <path
+        android:fillColor="#5A3E8A"
+        android:pathData="M73,45 L76,45 Q78,45 78,47 L78,53 Q78,55 76,55 L73,55 Z" />
+
+    <!-- Neck -->
+    <path
+        android:fillColor="#7B5EA7"
+        android:pathData="M48,68 L60,68 L60,74 L48,74 Z" />
+    <!-- Shoulders -->
+    <path
+        android:fillColor="#5A3E8A"
+        android:pathData="M36,74 L72,74 Q76,74 78,78 L78,82 L30,82 L30,78 Q32,74 36,74 Z" />
+</vector>
