@@ -155,8 +155,53 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .nbadge{position:absolute;top:0;right:calc(50% - 20px);background:var(--er);color:#fff;font-size:9px;font-weight:700;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center}
 
 /* ── PAGES ── */
-.page{display:none;min-height:100%}
+.page{display:none}
 .page.active{display:block;animation:pgin .22s ease}
+
+/* ── CHAT ── */
+.chat-wrap{display:flex;flex-direction:column;height:100%}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;padding-bottom:80px}
+.chat-msg{display:flex;gap:8px;align-items:flex-end;max-width:85%}
+.chat-msg.mine{flex-direction:row-reverse;margin-left:auto}
+.chat-bubble{padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word}
+.chat-msg.mine .chat-bubble{background:var(--ac);color:#fff;border-radius:18px 18px 4px 18px}
+.chat-msg.other .chat-bubble{background:var(--s2);color:var(--tx);border:1px solid var(--bd);border-radius:18px 18px 18px 4px}
+.chat-av-sm{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;background:var(--s3)}
+.chat-meta{font-size:10px;color:var(--t3);margin-top:3px}
+.chat-msg.mine .chat-meta{text-align:right}
+.chat-input-bar{position:fixed;bottom:0;left:0;right:0;padding:10px 16px;padding-bottom:calc(10px + var(--sb));background:rgba(6,6,15,.96);backdrop-filter:blur(24px);border-top:1px solid var(--bd);display:flex;gap:8px;align-items:flex-end;z-index:50}
+.chat-input{flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:22px;padding:10px 16px;color:var(--tx);font-size:14px;font-family:'Noto Sans SC',sans-serif;outline:none;resize:none;max-height:100px;line-height:1.5;transition:border-color .15s}
+.chat-input:focus{border-color:var(--ac)}
+.chat-send{width:40px;height:40px;border-radius:50%;background:var(--ac);border:none;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 12px rgba(124,111,255,.35);transition:all .15s}
+.chat-send:active{transform:scale(.92)}
+
+/* ── TALENT CARD ── */
+.talent-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.talent-card{background:var(--s1);border:2px solid var(--bd);border-radius:16px;padding:14px;cursor:pointer;transition:all .15s;text-align:center}
+.talent-card.selected{border-color:var(--ac);background:rgba(124,111,255,.08)}
+.talent-card:active{transform:scale(.96)}
+.talent-ic{font-size:30px;margin-bottom:6px}
+.talent-nm{font-size:13px;font-weight:700}
+.talent-ds{font-size:11px;color:var(--t2);margin-top:3px;line-height:1.4}
+
+/* ── PROFILE CARD ── */
+.profile-hero{padding:28px 20px 20px;text-align:center;position:relative}
+.profile-av-big{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:38px;margin:0 auto 12px;background:linear-gradient(135deg,rgba(124,111,255,.25),rgba(255,107,157,.15));border:2px solid rgba(124,111,255,.3)}
+.profile-name-big{font-size:22px;font-weight:900;letter-spacing:-.4px}
+.profile-talent-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:100px;background:rgba(124,111,255,.12);border:1px solid rgba(124,111,255,.2);font-size:12px;font-weight:600;color:var(--ac);margin-top:6px}
+
+/* ── PRIVACY TOGGLE ── */
+.priv-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--bd)}
+.priv-row:last-child{border-bottom:none}
+.priv-info{flex:1}
+.priv-name{font-size:15px;font-weight:600}
+.priv-sub{font-size:12px;color:var(--t2);margin-top:2px}
+.toggle-wrap{position:relative;width:48px;height:26px;flex-shrink:0}
+.toggle-wrap input{opacity:0;width:0;height:0;position:absolute}
+.toggle-slider{position:absolute;inset:0;background:var(--s3);border-radius:13px;cursor:pointer;transition:.2s;border:1px solid var(--bd2)}
+.toggle-slider::before{content:'';position:absolute;width:20px;height:20px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.toggle-wrap input:checked+.toggle-slider{background:var(--ac);border-color:var(--ac)}
+.toggle-wrap input:checked+.toggle-slider::before{left:24px}
 @keyframes pgin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 .pad{padding:16px}
@@ -734,11 +779,25 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
         </div>
       </div>
 
+      <div class="more-section-label">AI 个性化</div>
+      <div class="card" style="padding:0;margin-bottom:16px">
+        <div class="more-row" onclick="openSoulPage()">
+          <div class="mr-icon" style="background:rgba(245,200,66,.12)">✨</div>
+          <div class="mr-body"><div class="mr-name">灵魂 & 天赋</div><div class="mr-sub">自定义 AI 人格与职业天赋</div></div>
+          <div class="mr-right">›</div>
+        </div>
+      </div>
+
       <div class="more-section-label">账号</div>
       <div class="card" style="padding:0;margin-bottom:80px">
         <div class="more-row" onclick="gsp('auth')">
           <div class="mr-icon mr-green">🔑</div>
           <div class="mr-body"><div class="mr-name">账号绑定</div><div class="mr-sub">微信 / Apple / Google / 手机号</div></div>
+          <div class="mr-right">›</div>
+        </div>
+        <div class="more-row" onclick="logoutUser()">
+          <div class="mr-icon" style="background:rgba(255,77,112,.1)">🚪</div>
+          <div class="mr-body"><div class="mr-name">退出登录</div><div class="mr-sub" id="logoutSub">切换账号</div></div>
           <div class="mr-right">›</div>
         </div>
       </div>
@@ -856,28 +915,34 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
   <div class="page pad" id="page-friends">
     <div class="pghead">
       <div><div class="pgtitle">好友</div><div class="pgsub">关注与协作网络</div></div>
+      <button class="btn bg" onclick="gp('privacy')" style="padding:8px 14px;font-size:12px">🔒 隐私</button>
     </div>
     <!-- Search bar -->
     <div class="search-row">
-      <input class="search-inp" id="friendSearch" placeholder="搜索用户昵称..." oninput="filterFriends(this.value)">
+      <input class="search-inp" id="friendSearch" placeholder="搜索手机号或昵称..." oninput="onFriendSearchInput(this.value)" onkeydown="if(event.key==='Enter')searchUsers()">
       <button class="btn bp btn-sm" onclick="searchUsers()" style="border-radius:12px;padding:10px 16px">搜索</button>
+    </div>
+    <!-- Pending requests badge -->
+    <div id="pendingRequestsBanner" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(255,107,157,.08);border:1px solid rgba(255,107,157,.2);border-radius:12px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:13px;color:var(--pk);font-weight:600">📩 <span id="pendingCount">0</span> 条好友申请</span>
+      <button class="btn-sm btn-follow" onclick="switchSocialTab(2)" style="font-size:12px">查看</button>
     </div>
     <!-- Tabs -->
     <div class="social-tabs">
-      <div class="stab active" id="st0" onclick="switchSocialTab(0)">互相关注</div>
-      <div class="stab" id="st1" onclick="switchSocialTab(1)">我的关注</div>
-      <div class="stab" id="st2" onclick="switchSocialTab(2)">动态 Feed</div>
+      <div class="stab active" id="st0" onclick="switchSocialTab(0)">好友</div>
+      <div class="stab" id="st1" onclick="switchSocialTab(1)">申请</div>
+      <div class="stab" id="st2" onclick="switchSocialTab(2)">动态</div>
       <div class="stab" id="st3" onclick="switchSocialTab(3)">发现</div>
     </div>
     <!-- Tab content -->
     <div id="sc0">
-      <div class="card" style="padding:0">
-        <div id="mutualList"></div>
+      <div class="card" style="padding:0;margin-bottom:80px">
+        <div id="mutualList"><div class="empty-state"><div class="ei">👥</div><p>还没有好友<br>搜索用户添加好友吧</p></div></div>
       </div>
     </div>
     <div id="sc1" style="display:none">
-      <div class="card" style="padding:0">
-        <div id="followingList"></div>
+      <div class="card" style="padding:0;margin-bottom:80px">
+        <div id="pendingList"><div class="empty-state"><div class="ei">📩</div><p>暂无待处理申请</p></div></div>
       </div>
     </div>
     <div id="sc2" style="display:none">
@@ -887,7 +952,7 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     </div>
     <div id="sc3" style="display:none;margin-bottom:80px">
       <div class="card" style="padding:0">
-        <div id="discoverList"></div>
+        <div id="discoverList"><div class="empty-state"><div class="ei">🔍</div><p>输入手机号或昵称搜索用户</p></div></div>
       </div>
     </div>
   </div>
@@ -981,6 +1046,200 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     </div>
   </div>
 
+  <!-- ═══ SUB: SOUL & TALENT SETTINGS ═══ -->
+  <div class="page" id="page-soul">
+    <div class="subpage-back" onclick="gp('more')">‹ 更多</div>
+    <div class="pad" style="padding-top:12px">
+      <div class="pgtitle" style="margin-bottom:4px">灵魂 & 天赋</div>
+      <div class="pgsub" style="margin-bottom:20px">打造专属 AI 人格</div>
+
+      <!-- 天赋选择 -->
+      <div class="card">
+        <div class="ctitle">🎯 天赋类型</div>
+        <div class="pgsub" style="margin-bottom:14px;font-size:12px">选择最符合你工作场景的天赋，影响 AI 理解任务的方式</div>
+        <div class="talent-grid" id="talentGrid">
+          <div class="talent-card" data-t="software-engineer" onclick="selectTalent('software-engineer',this)">
+            <div class="talent-ic">💻</div>
+            <div class="talent-nm">工程师</div>
+            <div class="talent-ds">理解代码、PR、Sprint 等工程术语</div>
+          </div>
+          <div class="talent-card" data-t="product-manager" onclick="selectTalent('product-manager',this)">
+            <div class="talent-ic">📐</div>
+            <div class="talent-nm">产品经理</div>
+            <div class="talent-ds">理解 PRD、OKR、需求评审等</div>
+          </div>
+          <div class="talent-card" data-t="student" onclick="selectTalent('student',this)">
+            <div class="talent-ic">🎓</div>
+            <div class="talent-nm">学生</div>
+            <div class="talent-ds">理解作业、考试、论文、答辩等</div>
+          </div>
+          <div class="talent-card" data-t="default" onclick="selectTalent('default',this)">
+            <div class="talent-ic">⚡</div>
+            <div class="talent-nm">通用</div>
+            <div class="talent-ds">适配各种工作与生活场景</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 灵魂编辑 -->
+      <div class="card">
+        <div class="ctitle">✨ 灵魂补充提示词</div>
+        <div class="pgsub" style="margin-bottom:12px;font-size:12px">
+          在 AI 默认人格基础上，添加你的专属个性。例如：「请用更幽默的方式回复我」「在提取任务时始终询问截止日期」
+        </div>
+        <textarea class="inp" id="soulPromptInput" placeholder="例如：
+・回复时风格要活泼一些，偶尔用 emoji
+・我是一名 iOS 开发者，请优先关注 Swift 相关任务
+・创建任务时，如果没有截止日期，请主动询问" style="min-height:130px"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn bp" style="flex:1" onclick="saveSoulTalent()">💾 保存设置</button>
+          <button class="btn bg" onclick="clearSoulPrompt()">清空</button>
+        </div>
+      </div>
+
+      <!-- 头像 & 昵称 -->
+      <div class="card">
+        <div class="ctitle">👤 个人资料</div>
+        <div class="istack">
+          <div>
+            <div class="ilabel">昵称</div>
+            <input class="inp" id="profileName" placeholder="你的昵称">
+          </div>
+          <div>
+            <div class="ilabel">头像 Emoji</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap" id="avatarPicker">
+              👤 👨‍💻 👩‍💻 👨‍🎨 👩‍🎨 🧑‍💼 👨‍🏫 🦊 🐼 🦁 🐯 🐶 🐱 🤖 👾 🎮
+            </div>
+            <input class="inp" id="profileAvatar" placeholder="或输入任意 Emoji" maxlength="4" style="margin-top:8px;font-size:20px;width:80px">
+          </div>
+          <div class="cbrow">
+            <input type="checkbox" id="isSearchable" checked>
+            <label for="isSearchable">允许其他用户搜索到我</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:80px">
+        <div class="ctitle">💡 灵魂层说明</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.9">
+          ·「灵魂层（Soul）」是 AI 的底层人格，定义语气、原则、语言风格<br>
+          ·「天赋层（Talent）」让 AI 理解你的职业场景和专业术语<br>
+          · 两层叠加形成独特的个人 AI 助手<br>
+          · 修改后，下次对话立即生效
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SUB: CHAT ═══ -->
+  <div class="page" id="page-chat">
+    <div class="topbar" style="position:sticky;top:0;z-index:50">
+      <div class="topbar-l" style="gap:12px">
+        <div class="subpage-back" style="padding:0;border:none" onclick="gp('friends')">‹</div>
+        <div class="uav" id="chatFriendAv" style="width:36px;height:36px;font-size:16px">👤</div>
+        <div>
+          <div style="font-size:15px;font-weight:700" id="chatFriendName">好友</div>
+          <div style="font-size:11px;color:var(--t2)" id="chatFriendTalent"></div>
+        </div>
+      </div>
+      <div class="topbar-r">
+        <div style="cursor:pointer;font-size:20px;padding:4px" onclick="openFriendProfile(chatState.friendId)">ℹ️</div>
+      </div>
+    </div>
+    <div class="chat-msgs" id="chatMsgs">
+      <div style="text-align:center;padding:30px 0;color:var(--t3);font-size:13px">开始对话吧 👋</div>
+    </div>
+    <div class="chat-input-bar">
+      <textarea class="chat-input" id="chatInputBox" placeholder="发送消息..." rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMsg()}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+      <button class="chat-send" onclick="sendChatMsg()">➤</button>
+    </div>
+  </div>
+
+  <!-- ═══ SUB: FRIEND PROFILE ═══ -->
+  <div class="page" id="page-friend-profile">
+    <div class="subpage-back" id="friendProfileBack" onclick="gp('friends')">‹ 好友</div>
+    <div id="friendProfileContent" style="padding-bottom:100px">
+      <div class="profile-hero">
+        <div class="profile-av-big" id="fpAv">👤</div>
+        <div class="profile-name-big" id="fpName">用户</div>
+        <div class="profile-talent-badge" id="fpTalent">通用</div>
+      </div>
+      <div class="pad" style="padding-top:0">
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="btn bp" style="flex:1" id="fpChatBtn" onclick="openChatWith(friendProfileState.userId, friendProfileState.userName, friendProfileState.userAvatar)">💬 发消息</button>
+          <button class="btn bg" id="fpRelBtn" onclick="handleFriendRelation()">...</button>
+        </div>
+        <div class="card" id="fpSkillsCard" style="display:none">
+          <div class="ctitle">⚡ TA 的技能</div>
+          <div id="fpSkillsList"></div>
+        </div>
+        <div class="card" id="fpTasksCard" style="display:none">
+          <div class="ctitle">✅ 进行中的任务</div>
+          <div id="fpTasksList"></div>
+        </div>
+        <div class="card" id="fpEmptyCard">
+          <div class="empty-state" style="padding:24px 0">
+            <div class="ei">🔒</div>
+            <p>该用户未开放更多信息</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SUB: PRIVACY SETTINGS ═══ -->
+  <div class="page" id="page-privacy">
+    <div class="subpage-back" onclick="gp('friends')">‹ 好友</div>
+    <div class="pad" style="padding-top:12px">
+      <div class="pgtitle" style="margin-bottom:4px">隐私设置</div>
+      <div class="pgsub" style="margin-bottom:20px">控制好友可以看到哪些内容</div>
+      <div class="card">
+        <div class="ctitle">好友可见内容</div>
+        <div class="priv-row">
+          <div class="priv-info">
+            <div class="priv-name">⚡ 技能列表</div>
+            <div class="priv-sub">好友可以看到你发布的自定义技能</div>
+          </div>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="privSkills" onchange="savePrivacy()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="priv-row">
+          <div class="priv-info">
+            <div class="priv-name">✅ 任务清单</div>
+            <div class="priv-sub">好友可以看到你的待处理任务</div>
+          </div>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="privTasks" onchange="savePrivacy()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="priv-row">
+          <div class="priv-info">
+            <div class="priv-name">📊 活动动态</div>
+            <div class="priv-sub">好友可以在动态 Feed 看到你的使用记录</div>
+          </div>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="privActivity" onchange="savePrivacy()" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:80px">
+        <div class="ctitle">💡 隐私说明</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.9">
+          · 隐私设置只对已接受的好友生效<br>
+          · 修改后立即对所有好友生效<br>
+          · 你的手机号对任何人都不可见
+        </div>
+      </div>
+    </div>
+  </div>
+
   </div><!-- /scroll -->
 
   <!-- BOTTOM NAV -->
@@ -1042,32 +1301,74 @@ const SKILLS=[
 
 // ══════════════════ AUTH
 function loginWith(p){
-  const nm={wechat:'微信用户',apple:'Apple用户',google:'Google用户'};
-  const ic={wechat:'💬',apple:'🍎',google:'🔵'};
-  S.bound.push({p,id:`${p}_uid_demo`,icon:ic[p]});
-  doLogin({name:nm[p],av:ic[p]});
+  toast(`${p} OAuth 需配置 .env 中的 App Secret，请使用手机号登录`, 'info');
 }
-function sendOtp(){
-  const ph=document.getElementById('phoneInput').value;
+
+async function sendOtp(){
+  const ph=document.getElementById('phoneInput').value.trim();
   if(!ph){toast('请输入手机号','error');return;}
-  const btn=document.getElementById('otpBtn');btn.disabled=true;
-  let s=60;const iv=setInterval(()=>{btn.textContent=`${s}s`;s--;if(s<0){clearInterval(iv);btn.disabled=false;btn.textContent='发送';}},1000);
-  toast('验证码已发送：123456','info');
+  const btn=document.getElementById('otpBtn');
+  btn.disabled=true;
+  try {
+    const res = await fetch(`${API_BASE}/auth/otp/send`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:ph})
+    });
+    const data = await res.json();
+    if(data.demo) {
+      toast(`验证码已发送（Demo模式：123456）`,'info');
+    } else {
+      toast('验证码已发送到你的手机','success');
+    }
+    let s=60;const iv=setInterval(()=>{btn.textContent=`${s}s`;s--;if(s<0){clearInterval(iv);btn.disabled=false;btn.textContent='发送';}},1000);
+  } catch(e) {
+    toast('发送失败，请检查网络','error');
+    btn.disabled=false;
+  }
 }
-function verifyOtp(){
-  const o=document.getElementById('otpInput').value;
-  if(o&&o!=='123456'){toast('Demo 验证码：123456','error');return;}
-  doLogin({name:'手机用户',av:'📱'});
+
+async function verifyOtp(){
+  const ph=document.getElementById('phoneInput').value.trim();
+  const code=document.getElementById('otpInput').value.trim();
+  if(!ph||!code){toast('请填写手机号和验证码','error');return;}
+  try {
+    const res = await fetch(`${API_BASE}/auth/otp/verify`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:ph,code})
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error||'验证失败');
+    Auth.save(data.accessToken, data.user);
+    if(data.refreshToken) localStorage.setItem('ai_refresh', data.refreshToken);
+    doLogin(data.user);
+  } catch(e){
+    toast(`登录失败：${e.message}`,'error');
+  }
 }
-function doLogin(u){
-  S.user=u;
+
+function doLogin(user){
+  S.user = user;
   document.getElementById('authScreen').style.display='none';
   document.getElementById('app').style.display='flex';
-  document.getElementById('uAv').textContent=u.av;
-  document.getElementById('uName').textContent=u.name;
+  document.getElementById('uAv').textContent = user.avatarEmoji || user.av || '👤';
+  document.getElementById('uName').textContent = user.displayName || user.name || '用户';
+  document.getElementById('logoutSub').textContent = user.phone || '切换账号';
   updateGreeting();
   renderAll();
-  toast(`欢迎回来，${u.name}！`,'success');
+  toast(`欢迎回来，${user.displayName || user.name || '用户'}！`,'success');
+}
+
+async function logoutUser(){
+  if(!confirm('确认退出登录？')) return;
+  try { await apiCall('POST', '/auth/logout', {}); } catch {}
+  Auth.clear();
+  localStorage.removeItem('ai_refresh');
+  S.user = null;
+  document.getElementById('authScreen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  toast('已退出登录','info');
 }
 function updateGreeting(){
   const h=new Date().getHours();
@@ -1077,12 +1378,18 @@ function updateGreeting(){
 
 // ══════════════════ NAV
 const ROOT_PG=['home','voice','tasks','friends','market','more'];
+const FRIEND_PGS=['chat','friend-profile','privacy'];
 function gp(pg){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   const el=document.getElementById(`page-${pg}`);
   if(el)el.classList.add('active');
-  const nb=document.getElementById(`nb-${ROOT_PG.includes(pg)?pg:(['mdetail','publish'].includes(pg)?'market':'more')}`);
+  let nbKey;
+  if(ROOT_PG.includes(pg)) nbKey=pg;
+  else if(['mdetail','publish'].includes(pg)) nbKey='market';
+  else if(FRIEND_PGS.includes(pg)) nbKey='friends';
+  else nbKey='more';
+  const nb=document.getElementById(`nb-${nbKey}`);
   if(nb)nb.classList.add('active');
   document.getElementById('scr').scrollTop=0;
   rp(pg);
@@ -1093,14 +1400,16 @@ function rp(pg){
   if(pg==='tasks')rtasks();
   if(pg==='skills')rskills();
   if(pg==='memory')rmem();
-  if(pg==='audit')raudit();
+  if(pg==='audit'){raudit();loadAudit();}
   if(pg==='auth')rauth();
-  if(pg==='router'){rrules([]);rmodels_small();}
+  if(pg==='router'){rrules([]);}
   if(pg==='models')rmodels();
   if(pg==='friends')rfriends();
   if(pg==='market')rmarket();
+  if(pg==='soul')initSoulPage();
+  if(pg==='privacy')loadPrivacySettings();
 }
-function renderAll(){rdash();rtasks();rskills();rmem();raudit();rauth();rmodels();rrules([]);rfriends();rmarket();}
+function renderAll(){rdash();rtasks();rskills();rmem();raudit();rauth();rmodels();rrules([]);rmarket();rfriends();}
 
 // ══════════════════ (old onload removed - see DOMContentLoaded below)
 
@@ -1384,35 +1693,75 @@ function loadSample() {
 // ══════════════════ STARTUP — 连接后端 + 加载数据
 async function initApp() {
   // 检查后端连接
+  let backendOk = false;
   try {
     await fetch(`${API_BASE}/health`);
     document.getElementById('onlinePill').innerHTML = '● 后端已连接';
     document.getElementById('onlinePill').style.color = 'var(--ok)';
+    backendOk = true;
   } catch {
     document.getElementById('onlinePill').innerHTML = '● 离线模式';
     document.getElementById('onlinePill').style.color = 'var(--wn)';
     toast('无法连接后端，部分功能不可用', 'info');
   }
 
-  // Demo 模式：自动登录
-  if (!Auth.token) {
+  if (!backendOk) {
+    // 离线模式：如果有本地用户信息就直接用
+    if (Auth.user) {
+      doLogin(Auth.user);
+    }
+    return;
+  }
+
+  // 有已存储的 token，尝试验证
+  if (Auth.token) {
     try {
-      const res = await apiCall('POST', '/auth/demo-login', {});
-      Auth.save(res.accessToken, res.user);
-      // 更新用户名显示
-      document.getElementById('uName').textContent =
-        `你好，<span class="ac">${res.user?.displayName || '用户'}</span>`;
+      const me = await apiCall('GET', '/auth/me');
+      Auth.save(Auth.token, me);
+      doLogin(me);
+      await loadTasksFromBackend().catch(() => {});
+      await loadSkillsFromBackend().catch(() => {});
+      rdash();
+      return;
     } catch {
-      // 后端不可用，继续使用本地模式
+      // token 可能过期，尝试 refresh
+      const refreshToken = localStorage.getItem('ai_refresh');
+      if (refreshToken) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/refresh`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({refreshToken})
+          });
+          const data = await res.json();
+          if (data.accessToken) {
+            Auth.token = data.accessToken;
+            localStorage.setItem('ai_token', data.accessToken);
+            const me = await apiCall('GET', '/auth/me');
+            Auth.save(data.accessToken, me);
+            doLogin(me);
+            await loadTasksFromBackend().catch(() => {});
+            await loadSkillsFromBackend().catch(() => {});
+            rdash();
+            return;
+          }
+        } catch {}
+      }
+      Auth.clear();
     }
   }
 
-  // 加载任务
-  await loadTasksFromBackend().catch(() => {});
-  // 加载技能
-  await loadSkillsFromBackend().catch(() => {});
-
-  rdash();
+  // 没有有效 token，尝试 Demo 登录（DEMO_MODE=true 的后端）
+  try {
+    const res = await apiCall('POST', '/auth/demo-login', {});
+    Auth.save(res.accessToken, res.user);
+    doLogin(res.user);
+    await loadTasksFromBackend().catch(() => {});
+    await loadSkillsFromBackend().catch(() => {});
+    rdash();
+  } catch {
+    // Demo 模式未开启，显示登录界面
+    document.getElementById('authScreen').style.display = 'flex';
+  }
 }
 
 // ══════════════════ TASKS — 从后端加载
@@ -2089,30 +2438,9 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ══════════════════ SOCIAL STATE
-const FRIENDS_DATA = {
-  mutual: [
-    {id:'u1',name:'小明',av:'👨‍💻',meta:'软件工程师 · 互相关注',skills:4,status:'mutual'},
-    {id:'u2',name:'阿雪',av:'👩‍🎨',meta:'产品设计师 · 互相关注',skills:7,status:'mutual'},
-    {id:'u3',name:'老王',av:'🧑‍💼',meta:'项目经理 · 互相关注',skills:2,status:'mutual'},
-  ],
-  following: [
-    {id:'u4',name:'AI_Tom',av:'🤖',meta:'AI 研究员 · 你关注了他',skills:12,status:'following'},
-    {id:'u5',name:'数据达人',av:'📊',meta:'数据分析师 · 你关注了他',skills:5,status:'following'},
-  ],
-  discover: [
-    {id:'u6',name:'代码猫',av:'🐱',meta:'全栈开发者 · 发布了 9 个技能',skills:9,status:'none'},
-    {id:'u7',name:'效率控',av:'⚡',meta:'效率专家 · 发布了 6 个技能',skills:6,status:'none'},
-    {id:'u8',name:'Luna',av:'🌙',meta:'内容创作者 · 发布了 3 个技能',skills:3,status:'none'},
-    {id:'u9',name:'创业人',av:'🚀',meta:'连续创业者 · 发布了 5 个技能',skills:5,status:'none'},
-  ],
-  feed: [
-    {user:'小明',av:'👨‍💻',time:'10分钟前',type:'skill',text:'发布了新技能「代码 Review 助手」，支持多语言自动评审',pill:'🔥 技能发布',pillClass:'fp-skill'},
-    {user:'阿雪',av:'👩‍🎨',time:'1小时前',type:'task',text:'完成了「产品需求文档优化」任务，耗时 12 分钟',pill:'✅ 任务完成',pillClass:'fp-task'},
-    {user:'AI_Tom',av:'🤖',time:'3小时前',type:'skill',text:'更新了「学术论文摘要」技能，新增 PDF 解析支持',pill:'⚡ 技能更新',pillClass:'fp-skill'},
-    {user:'老王',av:'🧑‍💼',time:'昨天',type:'friend',text:'添加了「效率控」为好友，组成了协作小组',pill:'👥 新好友',pillClass:'fp-friend'},
-    {user:'数据达人',av:'📊',time:'昨天',type:'skill',text:'分享了「数据报告自动生成」技能，已被 38 人安装',pill:'📈 技能分享',pillClass:'fp-skill'},
-  ],
-};
+let FRIENDS_LIST = [];   // accepted friends
+let PENDING_LIST = [];   // pending requests
+let SEARCH_RESULTS = []; // user search results
 
 const MARKET_DATA = [
   {id:'m1',e:'🔍',name:'竞品分析助手',author:'AI_Tom',desc:'自动搜索竞品，生成对比报告',price:50,stars:4.8,installs:234,tags:['research','productivity'],badge:'hot',owned:false},
@@ -2128,65 +2456,111 @@ const MARKET_DATA = [
 let currentMarketFilter = 'all';
 let currentSocialTab = 0;
 
-// ── FRIENDS RENDER
-function rfriends() {
-  renderMutual();
-  renderFollowing();
-  renderFeed();
-  renderDiscover();
+// ══════════════════ FRIENDS - REAL BACKEND
+async function rfriends() {
+  if (!Auth.token) return;
+  try {
+    // Load accepted friends
+    const data = await apiCall('GET', '/api/friends?status=accepted');
+    FRIENDS_LIST = data.friends || [];
+    renderFriendsList();
+
+    // Load pending requests
+    const pend = await apiCall('GET', '/api/friends?status=pending');
+    PENDING_LIST = pend.friends || [];
+    renderPendingList();
+
+    // Update badge
+    const incoming = PENDING_LIST.filter(f => !f.isRequester);
+    const badge = document.getElementById('fbadge');
+    if (incoming.length) {
+      badge.textContent = incoming.length;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch(e) {
+    console.warn('rfriends error:', e);
+  }
 }
 
-function renderMutual() {
-  document.getElementById('mutualList').innerHTML = FRIENDS_DATA.mutual.map(f=>friendCard(f)).join('');
-}
-function renderFollowing() {
-  document.getElementById('followingList').innerHTML = FRIENDS_DATA.following.map(f=>friendCard(f)).join('');
-}
-function renderDiscover() {
-  document.getElementById('discoverList').innerHTML = FRIENDS_DATA.discover.map(f=>friendCard(f)).join('');
-}
-function renderFeed() {
-  document.getElementById('feedList').innerHTML = FRIENDS_DATA.feed.map(f=>`
-    <div class="feed-item">
-      <div class="feed-hd">
-        <div class="feed-av fav-purple">${f.av}</div>
-        <div class="feed-name">${f.user}</div>
-        <div class="feed-time">${f.time}</div>
+function renderFriendsList() {
+  const el = document.getElementById('mutualList');
+  if (!FRIENDS_LIST.length) {
+    el.innerHTML = '<div class="empty-state"><div class="ei">👥</div><p>还没有好友<br>搜索用户添加好友吧</p></div>';
+    return;
+  }
+  el.innerHTML = FRIENDS_LIST.map(f => `
+    <div class="friend-card" onclick="openFriendProfile('${f.friendId}','${f.friendName}','${f.friendAvatar}')">
+      <div class="fav fav-purple">${f.friendAvatar || '👤'}</div>
+      <div class="friend-info">
+        <div class="friend-name">${f.friendName}</div>
+        <div class="friend-meta">${talentLabel(f.friendTalent)}${f.unreadCount?` · <span style="color:var(--pk);font-weight:700">${f.unreadCount} 条新消息</span>`:''}</div>
       </div>
-      <div class="feed-body">${f.text}</div>
-      <div class="feed-pill ${f.pillClass}">${f.pill}</div>
+      <div class="friend-action">
+        <button class="btn-sm btn-mutual" onclick="event.stopPropagation();openChatWith('${f.friendId}','${f.friendName}','${f.friendAvatar}')">💬</button>
+      </div>
     </div>`).join('');
 }
 
-function friendCard(f) {
-  const avClass = ['fav-purple','fav-cyan','fav-pink','fav-purple','fav-cyan'][FRIENDS_DATA.mutual.concat(FRIENDS_DATA.following,FRIENDS_DATA.discover).indexOf(f)%3] || 'fav-purple';
-  let btn = '';
-  if (f.status === 'mutual') btn = `<button class="btn-sm btn-mutual" onclick="event.stopPropagation()">✓ 好友</button>`;
-  else if (f.status === 'following') btn = `<button class="btn-sm btn-following" onclick="toggleFollow('${f.id}',this)">已关注</button>`;
-  else btn = `<button class="btn-sm btn-follow" onclick="toggleFollow('${f.id}',this)">+ 关注</button>`;
-  return `<div class="friend-card">
-    <div class="fav ${avClass}">${f.av}</div>
-    <div class="friend-info">
-      <div class="friend-name">${f.name}</div>
-      <div class="friend-meta">${f.meta} · ${f.skills} 个技能</div>
-    </div>
-    <div class="friend-action">${btn}</div>
-  </div>`;
+function renderPendingList() {
+  const el = document.getElementById('pendingList');
+  const incoming = PENDING_LIST.filter(f => !f.isRequester);
+  const outgoing = PENDING_LIST.filter(f => f.isRequester);
+
+  let html = '';
+  if (incoming.length) {
+    html += `<div style="padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--t3)">收到的申请</div>`;
+    html += incoming.map(f => `
+      <div class="friend-card">
+        <div class="fav fav-pink">${f.friendAvatar || '👤'}</div>
+        <div class="friend-info">
+          <div class="friend-name">${f.friendName}</div>
+          <div class="friend-meta">申请加你为好友</div>
+        </div>
+        <div class="friend-action" style="display:flex;gap:6px">
+          <button class="btn-sm btn-follow" onclick="respondFriendReq('${f.friendshipId}','accept')">接受</button>
+          <button class="btn-sm btn-following" onclick="respondFriendReq('${f.friendshipId}','reject')">拒绝</button>
+        </div>
+      </div>`).join('');
+  }
+  if (outgoing.length) {
+    html += `<div style="padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--t3)">已发出的申请</div>`;
+    html += outgoing.map(f => `
+      <div class="friend-card">
+        <div class="fav fav-cyan">${f.friendAvatar || '👤'}</div>
+        <div class="friend-info">
+          <div class="friend-name">${f.friendName}</div>
+          <div class="friend-meta">等待对方确认</div>
+        </div>
+        <div class="friend-action">
+          <button class="btn-sm btn-following" onclick="cancelFriendReq('${f.friendshipId}')">取消</button>
+        </div>
+      </div>`).join('');
+  }
+  if (!html) html = '<div class="empty-state"><div class="ei">📩</div><p>暂无待处理申请</p></div>';
+  el.innerHTML = html;
 }
 
-function toggleFollow(uid, btn) {
-  if (btn.classList.contains('btn-follow')) {
-    btn.className = 'btn-sm btn-following';
-    btn.textContent = '已关注';
-    toast('关注成功！', 'success');
-    // update discover → following
-    const u = FRIENDS_DATA.discover.find(x=>x.id===uid);
-    if (u) { u.status='following'; FRIENDS_DATA.following.push(u); }
-  } else {
-    btn.className = 'btn-sm btn-follow';
-    btn.textContent = '+ 关注';
-    toast('已取消关注', 'info');
-  }
+async function respondFriendReq(friendshipId, action) {
+  try {
+    await apiCall('PATCH', `/api/friends/${friendshipId}`, { action });
+    toast(action === 'accept' ? '已接受好友申请 🎉' : '已拒绝申请', action === 'accept' ? 'success' : 'info');
+    await rfriends();
+  } catch(e) { toast(`操作失败：${e.message}`, 'error'); }
+}
+
+async function cancelFriendReq(friendshipId) {
+  try {
+    await apiCall('PATCH', `/api/friends/${friendshipId}`, { action: 'remove' });
+    toast('已取消申请', 'info');
+    await rfriends();
+  } catch(e) { toast(`操作失败：${e.message}`, 'error'); }
+}
+
+function talentLabel(t) {
+  const m = { 'software-engineer':'💻 工程师', 'product-manager':'📐 产品经理', 'student':'🎓 学生', 'default':'⚡ 通用' };
+  return m[t] || '⚡ 通用';
 }
 
 function switchSocialTab(idx) {
@@ -2198,19 +2572,313 @@ function switchSocialTab(idx) {
   currentSocialTab = idx;
 }
 
-function searchUsers() {
-  const q = document.getElementById('friendSearch').value.trim();
-  if(!q){toast('请输入搜索内容','error');return;}
-  // Switch to discover tab and show results
-  switchSocialTab(3);
-  const all = FRIENDS_DATA.discover.filter(u=>u.name.includes(q)||u.meta.includes(q));
-  document.getElementById('discoverList').innerHTML = all.length
-    ? all.map(f=>friendCard(f)).join('')
-    : `<div class="empty-state"><div class="ei">🔍</div><p>未找到用户"${q}"</p></div>`;
+function onFriendSearchInput(v) {
+  if (!v) {
+    switchSocialTab(0);
+    renderFriendsList();
+  }
 }
 
-function filterFriends(q) {
-  if(!q) { renderDiscover(); return; }
+async function searchUsers() {
+  const q = document.getElementById('friendSearch').value.trim();
+  if(!q){toast('请输入搜索内容','error');return;}
+  switchSocialTab(3);
+  const el = document.getElementById('discoverList');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t2)">搜索中...</div>';
+  try {
+    const data = await apiCall('GET', `/api/users/search?q=${encodeURIComponent(q)}`);
+    const users = data.users || [];
+    if (!users.length) {
+      el.innerHTML = `<div class="empty-state"><div class="ei">🔍</div><p>未找到用户"${q}"<br>可能该用户未开启搜索或不存在</p></div>`;
+      return;
+    }
+    SEARCH_RESULTS = users;
+    el.innerHTML = users.map(u => {
+      const rel = u.relation;
+      let btn = '';
+      if (rel?.status === 'accepted') {
+        btn = `<button class="btn-sm btn-mutual" onclick="event.stopPropagation();openChatWith('${u.id}','${u.displayName}','${u.avatarEmoji}')">💬 聊天</button>`;
+      } else if (rel?.status === 'pending' && rel?.isRequester) {
+        btn = `<button class="btn-sm btn-following">申请中</button>`;
+      } else if (rel?.status === 'pending') {
+        btn = `<button class="btn-sm btn-follow" onclick="event.stopPropagation();respondFriendReq('${rel.friendshipId}','accept')">接受</button>`;
+      } else {
+        btn = `<button class="btn-sm btn-follow" onclick="event.stopPropagation();sendFriendRequest('${u.id}',this)">+ 加好友</button>`;
+      }
+      return `<div class="friend-card" onclick="openFriendProfile('${u.id}','${u.displayName}','${u.avatarEmoji}')">
+        <div class="fav fav-purple">${u.avatarEmoji || '👤'}</div>
+        <div class="friend-info">
+          <div class="friend-name">${u.displayName}</div>
+          <div class="friend-meta">${talentLabel(u.talent)}</div>
+        </div>
+        <div class="friend-action">${btn}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>搜索失败：${e.message}</p></div>`;
+  }
+}
+
+async function sendFriendRequest(userId, btn) {
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  try {
+    await apiCall('POST', '/api/friends/request', { recipientId: userId });
+    btn.className = 'btn-sm btn-following';
+    btn.textContent = '已申请';
+    btn.disabled = false;
+    toast('好友申请已发送！', 'success');
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '+ 加好友';
+    toast(`发送失败：${e.message}`, 'error');
+  }
+}
+
+// ── FEED (static demo since it needs real activity tracking)
+function renderFeed() {
+  const el = document.getElementById('feedList');
+  const friends = FRIENDS_LIST.slice(0, 5);
+  if (!friends.length) {
+    el.innerHTML = '<div class="empty-state"><div class="ei">📊</div><p>添加好友后<br>这里会显示好友动态</p></div>';
+    return;
+  }
+  const actions = ['完成了一项任务', '运行了 AI 分析', '创建了新技能', '更新了记忆'];
+  el.innerHTML = friends.map((f, i) => `
+    <div class="feed-item">
+      <div class="feed-hd">
+        <div class="feed-av fav-purple">${f.friendAvatar}</div>
+        <div class="feed-name">${f.friendName}</div>
+        <div class="feed-time">${i===0?'刚刚':i===1?'1小时前':i+'天前'}</div>
+      </div>
+      <div class="feed-body">${actions[i % actions.length]}</div>
+    </div>`).join('');
+}
+
+// ══════════════════ CHAT
+const chatState = { friendId: null, friendName: '', polling: null };
+
+function openChatWith(friendId, friendName, friendAvatar) {
+  chatState.friendId = friendId;
+  chatState.friendName = friendName;
+  document.getElementById('chatFriendAv').textContent = friendAvatar || '👤';
+  document.getElementById('chatFriendName').textContent = friendName;
+  const f = FRIENDS_LIST.find(x => x.friendId === friendId);
+  document.getElementById('chatFriendTalent').textContent = f ? talentLabel(f.friendTalent) : '';
+  gp('chat');
+  loadChatMessages(friendId);
+  // 轮询新消息
+  if (chatState.polling) clearInterval(chatState.polling);
+  chatState.polling = setInterval(() => {
+    if (document.getElementById('page-chat')?.classList.contains('active')) {
+      loadChatMessages(friendId);
+    } else {
+      clearInterval(chatState.polling);
+      chatState.polling = null;
+    }
+  }, 5000);
+}
+
+async function loadChatMessages(friendId) {
+  try {
+    const data = await apiCall('GET', `/api/messages/${friendId}?limit=50`);
+    const msgs = data.messages || [];
+    const el = document.getElementById('chatMsgs');
+    const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
+    if (!msgs.length) {
+      el.innerHTML = '<div style="text-align:center;padding:30px 0;color:var(--t3);font-size:13px">开始对话吧 👋</div>';
+      return;
+    }
+    el.innerHTML = msgs.map(m => {
+      const isMine = m.from_user_id === Auth.userId;
+      const time = new Date(m.created_at).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+      return `<div class="chat-msg ${isMine?'mine':'other'}">
+        ${!isMine ? `<div class="chat-av-sm">${m.from_avatar||'👤'}</div>` : ''}
+        <div>
+          <div class="chat-bubble">${escapeHtml(m.content)}</div>
+          <div class="chat-meta">${time}</div>
+        </div>
+      </div>`;
+    }).join('');
+    if (wasAtBottom) el.scrollTop = el.scrollHeight;
+    // refresh friend list unread count
+    await rfriends().catch(() => {});
+  } catch(e) { console.warn('loadChatMessages:', e); }
+}
+
+async function sendChatMsg() {
+  const inp = document.getElementById('chatInputBox');
+  const content = inp.value.trim();
+  if (!content || !chatState.friendId) return;
+  inp.value = '';
+  inp.style.height = 'auto';
+  try {
+    await apiCall('POST', '/api/messages', { toUserId: chatState.friendId, content });
+    await loadChatMessages(chatState.friendId);
+    const el = document.getElementById('chatMsgs');
+    el.scrollTop = el.scrollHeight;
+  } catch(e) { toast(`发送失败：${e.message}`, 'error'); inp.value = content; }
+}
+
+function escapeHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+// ══════════════════ FRIEND PROFILE
+const friendProfileState = { userId: null, userName: '', userAvatar: '' };
+
+async function openFriendProfile(userId, userName, userAvatar) {
+  friendProfileState.userId = userId;
+  friendProfileState.userName = userName || '用户';
+  friendProfileState.userAvatar = userAvatar || '👤';
+  document.getElementById('fpAv').textContent = userAvatar || '👤';
+  document.getElementById('fpName').textContent = userName || '用户';
+  document.getElementById('fpSkillsCard').style.display = 'none';
+  document.getElementById('fpTasksCard').style.display = 'none';
+  document.getElementById('fpEmptyCard').style.display = 'block';
+  gp('friend-profile');
+
+  try {
+    const profile = await apiCall('GET', `/api/friends/${userId}/profile`);
+    document.getElementById('fpTalent').textContent = talentLabel(profile.talent);
+
+    const relBtn = document.getElementById('fpRelBtn');
+    if (profile.isFriend) {
+      relBtn.textContent = '✓ 好友';
+      relBtn.className = 'btn bg';
+      relBtn.onclick = () => {
+        if (confirm(`确认删除好友 ${profile.displayName}？`)) removeFriend(userId);
+      };
+    } else {
+      relBtn.textContent = '+ 加好友';
+      relBtn.className = 'btn bp';
+      relBtn.onclick = () => sendFriendRequestFromProfile(userId, relBtn);
+    }
+
+    let hasContent = false;
+    if (profile.skills?.length) {
+      hasContent = true;
+      document.getElementById('fpSkillsCard').style.display = 'block';
+      document.getElementById('fpSkillsList').innerHTML = profile.skills.map(s =>
+        `<div class="card-sm" style="margin-bottom:8px;display:flex;align-items:center;gap:12px">
+           <span style="font-size:24px">${s.emoji||'⚡'}</span>
+           <div><div style="font-size:14px;font-weight:700">${s.name}</div><div style="font-size:12px;color:var(--t2)">${s.description||''}</div></div>
+         </div>`).join('');
+    }
+    if (profile.recentTasks?.length) {
+      hasContent = true;
+      document.getElementById('fpTasksCard').style.display = 'block';
+      document.getElementById('fpTasksList').innerHTML = profile.recentTasks.map(t =>
+        `<div class="titem" style="padding:10px 0">
+           <div class="tck" style="background:none"></div>
+           <div style="flex:1"><div class="ttitle">${t.title}</div>
+           <div class="tmeta">${ptag(t.priority)}</div></div>
+         </div>`).join('');
+    }
+    if (hasContent) document.getElementById('fpEmptyCard').style.display = 'none';
+  } catch(e) { console.warn('openFriendProfile:', e); }
+}
+
+async function sendFriendRequestFromProfile(userId, btn) {
+  btn.disabled = true;
+  btn.textContent = '发送中...';
+  try {
+    await apiCall('POST', '/api/friends/request', { recipientId: userId });
+    btn.textContent = '已申请';
+    toast('好友申请已发送！', 'success');
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '+ 加好友';
+    toast(`发送失败：${e.message}`, 'error');
+  }
+}
+
+async function removeFriend(userId) {
+  try {
+    const f = FRIENDS_LIST.find(x => x.friendId === userId);
+    if (f) await apiCall('PATCH', `/api/friends/${f.friendshipId}`, { action: 'remove' });
+    toast('已删除好友', 'info');
+    gp('friends');
+    await rfriends();
+  } catch(e) { toast(`操作失败：${e.message}`, 'error'); }
+}
+
+function handleFriendRelation() { /* handled by fpRelBtn onclick */ }
+
+// ══════════════════ PRIVACY SETTINGS
+async function loadPrivacySettings() {
+  try {
+    const p = await apiCall('GET', '/api/friends/privacy');
+    document.getElementById('privSkills').checked = p.show_skills ?? true;
+    document.getElementById('privTasks').checked = p.show_tasks ?? false;
+    document.getElementById('privActivity').checked = p.show_activity ?? true;
+  } catch(e) { console.warn('loadPrivacy:', e); }
+}
+
+async function savePrivacy() {
+  try {
+    await apiCall('PUT', '/api/friends/privacy', {
+      showSkills: document.getElementById('privSkills').checked,
+      showTasks: document.getElementById('privTasks').checked,
+      showActivity: document.getElementById('privActivity').checked,
+    });
+    toast('隐私设置已保存', 'success');
+  } catch(e) { toast(`保存失败：${e.message}`, 'error'); }
+}
+
+// ══════════════════ SOUL & TALENT SETTINGS
+let selectedTalent = 'default';
+
+function openSoulPage() {
+  initSoulPage();
+  gsp('soul');
+}
+
+function initSoulPage() {
+  const user = Auth.user;
+  if (user) {
+    selectedTalent = user.talent || 'default';
+    document.getElementById('soulPromptInput').value = user.soulPrompt || '';
+    document.getElementById('profileName').value = user.displayName || '';
+    document.getElementById('profileAvatar').value = user.avatarEmoji || '👤';
+    document.getElementById('isSearchable').checked = user.isSearchable !== false;
+    document.querySelectorAll('.talent-card').forEach(c => {
+      c.classList.toggle('selected', c.dataset.t === selectedTalent);
+    });
+  }
+}
+
+function selectTalent(t, el) {
+  selectedTalent = t;
+  document.querySelectorAll('.talent-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function clearSoulPrompt() {
+  document.getElementById('soulPromptInput').value = '';
+}
+
+async function saveSoulTalent() {
+  const soulPrompt = document.getElementById('soulPromptInput').value.trim() || null;
+  const displayName = document.getElementById('profileName').value.trim() || undefined;
+  const avatarEmoji = document.getElementById('profileAvatar').value.trim() || undefined;
+  const isSearchable = document.getElementById('isSearchable').checked;
+
+  try {
+    const updated = await apiCall('PUT', '/auth/profile', {
+      talent: selectedTalent,
+      soulPrompt,
+      displayName,
+      avatarEmoji,
+      isSearchable,
+    });
+    Auth.save(Auth.token, { ...Auth.user, ...updated });
+    S.user = Auth.user;
+    document.getElementById('uAv').textContent = updated.avatarEmoji || '👤';
+    document.getElementById('uName').textContent = updated.displayName || '用户';
+    document.getElementById('logoutSub').textContent = Auth.user?.phone || '切换账号';
+    toast('设置已保存 ✅', 'success');
+  } catch(e) { toast(`保存失败：${e.message}`, 'error'); }
 }
 
 // ── MARKET RENDER
@@ -2359,23 +3027,8 @@ function addPublishBtn() {
   }
 }
 
-// ── ALSO update more page to include shortcuts to new pages
 document.addEventListener('DOMContentLoaded', ()=>{
   addPublishBtn();
-  // patch more page
-  const moreAcc = document.querySelector('#page-more .card');
-  if(moreAcc) {
-    const r1 = document.createElement('div');
-    r1.className = 'more-row';
-    r1.onclick = ()=>gp('friends');
-    r1.innerHTML = `<div class="mr-icon" style="background:rgba(124,111,255,.12)">👥</div><div class="mr-body"><div class="mr-name">好友系统</div><div class="mr-sub">关注 · 动态 · 发现</div></div><div class="mr-right">›</div>`;
-    const r2 = document.createElement('div');
-    r2.className = 'more-row';
-    r2.onclick = ()=>gp('market');
-    r2.innerHTML = `<div class="mr-icon" style="background:rgba(255,107,157,.1)">🛒</div><div class="mr-body"><div class="mr-name">技能市场</div><div class="mr-sub">发布 · 安装 · 交易</div></div><div class="mr-right">›</div>`;
-    moreAcc.prepend(r2);
-    moreAcc.prepend(r1);
-  }
 });
 
 // ══════════════════ DASHBOARD

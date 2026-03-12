@@ -142,10 +142,55 @@ module.exports = async function authRoutes(app) {
     return {
       id: u.id,
       displayName: u.display_name,
+      avatarEmoji: u.avatar_emoji || '👤',
       phone: u.phone,
       email: u.email,
       talent: u.talent,
+      soulPrompt: u.soul_prompt,
       preferredModel: u.preferred_model,
+      isSearchable: u.is_searchable,
     };
+  });
+
+  // ── 更新个人资料（昵称、头像、灵魂、天赋、搜索可见性）──
+  app.put('/profile', {
+    preHandler: [async (req, reply) => {
+      try { await req.jwtVerify(); }
+      catch { reply.code(401).send({ error: 'Unauthorized' }); }
+    }]
+  }, async (req) => {
+    const { displayName, avatarEmoji, talent, soulPrompt, preferredModel, isSearchable } = req.body || {};
+    const res = await query(
+      `UPDATE users SET
+         display_name    = COALESCE($2, display_name),
+         avatar_emoji    = COALESCE($3, avatar_emoji),
+         talent          = COALESCE($4, talent),
+         soul_prompt     = COALESCE($5, soul_prompt),
+         preferred_model = COALESCE($6, preferred_model),
+         is_searchable   = COALESCE($7, is_searchable)
+       WHERE id=$1 RETURNING *`,
+      [req.user.sub, displayName, avatarEmoji, talent, soulPrompt, preferredModel, isSearchable]
+    );
+    const u = res.rows[0];
+    return {
+      id: u.id,
+      displayName: u.display_name,
+      avatarEmoji: u.avatar_emoji || '👤',
+      talent: u.talent,
+      soulPrompt: u.soul_prompt,
+      preferredModel: u.preferred_model,
+      isSearchable: u.is_searchable,
+    };
+  });
+
+  // ── 退出登录 ──────────────────────────────────────
+  app.post('/logout', {
+    preHandler: [async (req, reply) => {
+      try { await req.jwtVerify(); }
+      catch { return reply.code(401).send({ error: 'Unauthorized' }); }
+    }]
+  }, async (req, reply) => {
+    await query(`DELETE FROM refresh_tokens WHERE user_id=$1`, [req.user.sub]);
+    return reply.code(204).send();
   });
 };
