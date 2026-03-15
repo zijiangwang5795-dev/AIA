@@ -40,16 +40,19 @@ app.register(require('./routes/billing'),  { prefix: '/api' });
 app.register(require('./routes/feedback'), { prefix: '/api' });
 app.register(require('./routes/push'),     { prefix: '/api' });
 
-// ── 静态前端（可选）──────────────────────────────────
-// 如果把前端 HTML 放在 public/ 目录下，可以直接托管
-try {
-  app.register(require('@fastify/static'), {
-    root: path.join(__dirname, '../public'),
-    prefix: '/',
-  });
-} catch (e) {
-  // @fastify/static 未安装时忽略
-}
+// ── 静态前端 ──────────────────────────────────────────
+app.register(require('@fastify/static'), {
+  root: path.join(__dirname, '../public'),
+  prefix: '/',
+});
+
+// SPA 回退：未匹配的路由返回 index.html
+app.setNotFoundHandler((req, reply) => {
+  if (!req.url.startsWith('/api') && !req.url.startsWith('/auth') && !req.url.startsWith('/health')) {
+    return reply.sendFile('index.html');
+  }
+  reply.code(404).send({ message: `Route ${req.method}:${req.url} not found`, statusCode: 404 });
+});
 
 // ── 启动 ──────────────────────────────────────────────
 const start = async () => {
