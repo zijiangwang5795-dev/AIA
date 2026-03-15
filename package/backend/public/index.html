@@ -94,6 +94,24 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .fp-task{background:rgba(61,255,160,.1);color:var(--ok);border:1px solid rgba(61,255,160,.18)}
 .fp-friend{background:rgba(255,107,157,.1);color:var(--pk);border:1px solid rgba(255,107,157,.18)}
 .search-row{display:flex;gap:8px;margin-bottom:16px}
+/* ── chat ── */
+.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 120px)}
+.chat-msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.msg-row{display:flex;gap:8px;align-items:flex-end}
+.msg-row.mine{flex-direction:row-reverse}
+.msg-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.msg-bubble{max-width:70%;padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word}
+.msg-row:not(.mine) .msg-bubble{background:var(--s3);border-bottom-left-radius:4px}
+.msg-row.mine .msg-bubble{background:var(--ac);color:#fff;border-bottom-right-radius:4px}
+.msg-time{font-size:10px;color:var(--t3);margin-top:2px;text-align:center;width:100%}
+.chat-input-row{display:flex;gap:8px;padding:10px 16px;border-top:1px solid var(--bd);background:var(--bg)}
+.chat-inp{flex:1;padding:10px 14px;background:var(--s2);border:1px solid var(--bd);border-radius:22px;color:var(--tx);font-size:14px;font-family:inherit;outline:none;resize:none;max-height:100px}
+.chat-inp:focus{border-color:var(--ac)}
+.chat-send{width:42px;height:42px;border-radius:50%;background:var(--ac);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;transition:transform .15s}
+.chat-send:active{transform:scale(.9)}
+.chat-unread{min-width:18px;height:18px;border-radius:9px;background:var(--pk);color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;padding:0 4px}
+.friend-card{cursor:pointer}
+.friend-card:active{background:var(--s2)}
 .search-inp{flex:1;padding:10px 14px;background:var(--s2);border:1px solid var(--bd);border-radius:12px;color:var(--tx);font-size:14px;font-family:inherit}
 .search-inp:focus{outline:none;border-color:var(--ac)}
 .notif-dot{width:8px;height:8px;border-radius:50%;background:var(--pk);display:inline-block;margin-left:4px}
@@ -983,6 +1001,21 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
 
   </div><!-- /scroll -->
 
+  <!-- ═══ SUB: CHAT ═══ -->
+  <div class="page" id="page-chat">
+    <div class="subpage-back" onclick="gp('friends')" id="chatBack">‹ 好友</div>
+    <div class="chat-wrap">
+      <div class="chat-msgs" id="chatMsgs">
+        <div class="empty-state"><div class="ei">💬</div><p>暂无消息，发送第一条吧</p></div>
+      </div>
+      <div class="chat-input-row">
+        <textarea class="chat-inp" id="chatInput" placeholder="发消息…" rows="1"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}"></textarea>
+        <button class="chat-send" onclick="chatSend()">➤</button>
+      </div>
+    </div>
+  </div>
+
   <!-- BOTTOM NAV -->
   <div class="botnav">
     <div class="nb active" id="nb-home" onclick="gp('home')"><div class="ni">🏠</div><div class="nl">主页</div></div>
@@ -1082,7 +1115,7 @@ function gp(pg){
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
   const el=document.getElementById(`page-${pg}`);
   if(el)el.classList.add('active');
-  const nb=document.getElementById(`nb-${ROOT_PG.includes(pg)?pg:(['mdetail','publish'].includes(pg)?'market':'more')}`);
+  const nb=document.getElementById(`nb-${ROOT_PG.includes(pg)?pg:(['mdetail','publish'].includes(pg)?'market':pg==='chat'?'friends':'more')}`);
   if(nb)nb.classList.add('active');
   document.getElementById('scr').scrollTop=0;
   rp(pg);
@@ -2089,30 +2122,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ══════════════════ SOCIAL STATE
-const FRIENDS_DATA = {
-  mutual: [
-    {id:'u1',name:'小明',av:'👨‍💻',meta:'软件工程师 · 互相关注',skills:4,status:'mutual'},
-    {id:'u2',name:'阿雪',av:'👩‍🎨',meta:'产品设计师 · 互相关注',skills:7,status:'mutual'},
-    {id:'u3',name:'老王',av:'🧑‍💼',meta:'项目经理 · 互相关注',skills:2,status:'mutual'},
-  ],
-  following: [
-    {id:'u4',name:'AI_Tom',av:'🤖',meta:'AI 研究员 · 你关注了他',skills:12,status:'following'},
-    {id:'u5',name:'数据达人',av:'📊',meta:'数据分析师 · 你关注了他',skills:5,status:'following'},
-  ],
-  discover: [
-    {id:'u6',name:'代码猫',av:'🐱',meta:'全栈开发者 · 发布了 9 个技能',skills:9,status:'none'},
-    {id:'u7',name:'效率控',av:'⚡',meta:'效率专家 · 发布了 6 个技能',skills:6,status:'none'},
-    {id:'u8',name:'Luna',av:'🌙',meta:'内容创作者 · 发布了 3 个技能',skills:3,status:'none'},
-    {id:'u9',name:'创业人',av:'🚀',meta:'连续创业者 · 发布了 5 个技能',skills:5,status:'none'},
-  ],
-  feed: [
-    {user:'小明',av:'👨‍💻',time:'10分钟前',type:'skill',text:'发布了新技能「代码 Review 助手」，支持多语言自动评审',pill:'🔥 技能发布',pillClass:'fp-skill'},
-    {user:'阿雪',av:'👩‍🎨',time:'1小时前',type:'task',text:'完成了「产品需求文档优化」任务，耗时 12 分钟',pill:'✅ 任务完成',pillClass:'fp-task'},
-    {user:'AI_Tom',av:'🤖',time:'3小时前',type:'skill',text:'更新了「学术论文摘要」技能，新增 PDF 解析支持',pill:'⚡ 技能更新',pillClass:'fp-skill'},
-    {user:'老王',av:'🧑‍💼',time:'昨天',type:'friend',text:'添加了「效率控」为好友，组成了协作小组',pill:'👥 新好友',pillClass:'fp-friend'},
-    {user:'数据达人',av:'📊',time:'昨天',type:'skill',text:'分享了「数据报告自动生成」技能，已被 38 人安装',pill:'📈 技能分享',pillClass:'fp-skill'},
-  ],
-};
+// FRIENDS_DATA removed — now fetched from API
 
 const MARKET_DATA = [
   {id:'m1',e:'🔍',name:'竞品分析助手',author:'AI_Tom',desc:'自动搜索竞品，生成对比报告',price:50,stars:4.8,installs:234,tags:['research','productivity'],badge:'hot',owned:false},
@@ -2127,66 +2137,130 @@ const MARKET_DATA = [
 
 let currentMarketFilter = 'all';
 let currentSocialTab = 0;
+// ── FRIENDS STATE
+let _friendsLoaded = false;
+let _friendsList = [];   // accepted friends
+let _pendingList = [];   // pending requests
+let _discoverList = [];  // search results
 
-// ── FRIENDS RENDER
-function rfriends() {
-  renderMutual();
-  renderFollowing();
-  renderFeed();
-  renderDiscover();
+// ── FRIENDS RENDER (real API)
+async function rfriends() {
+  if (!Auth.token) {
+    document.getElementById('mutualList').innerHTML = `<div class="empty-state"><div class="ei">🔐</div><p>请先登录</p></div>`;
+    return;
+  }
+  try {
+    const [accepted, pending] = await Promise.all([
+      apiCall('GET', '/api/friends?status=accepted'),
+      apiCall('GET', '/api/friends?status=pending'),
+    ]);
+    _friendsList = accepted.friends || [];
+    _pendingList = pending.friends || [];
+    renderMutual();
+    renderPending();
+    updateFriendBadge();
+  } catch(e) {
+    document.getElementById('mutualList').innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${e.message}</p></div>`;
+  }
 }
 
 function renderMutual() {
-  document.getElementById('mutualList').innerHTML = FRIENDS_DATA.mutual.map(f=>friendCard(f)).join('');
-}
-function renderFollowing() {
-  document.getElementById('followingList').innerHTML = FRIENDS_DATA.following.map(f=>friendCard(f)).join('');
-}
-function renderDiscover() {
-  document.getElementById('discoverList').innerHTML = FRIENDS_DATA.discover.map(f=>friendCard(f)).join('');
-}
-function renderFeed() {
-  document.getElementById('feedList').innerHTML = FRIENDS_DATA.feed.map(f=>`
-    <div class="feed-item">
-      <div class="feed-hd">
-        <div class="feed-av fav-purple">${f.av}</div>
-        <div class="feed-name">${f.user}</div>
-        <div class="feed-time">${f.time}</div>
-      </div>
-      <div class="feed-body">${f.text}</div>
-      <div class="feed-pill ${f.pillClass}">${f.pill}</div>
-    </div>`).join('');
+  const el = document.getElementById('mutualList');
+  if (!_friendsList.length) { el.innerHTML = `<div class="empty-state"><div class="ei">👥</div><p>暂无好友，搜索添加吧</p></div>`; return; }
+  el.innerHTML = _friendsList.map((f,i) => friendCard({
+    id: f.friendId, name: f.friendName, av: f.friendAvatar,
+    meta: f.friendTalent || '', unread: f.unreadCount || 0,
+    status: 'accepted', fsid: f.friendshipId,
+  }, i)).join('');
 }
 
-function friendCard(f) {
-  const avClass = ['fav-purple','fav-cyan','fav-pink','fav-purple','fav-cyan'][FRIENDS_DATA.mutual.concat(FRIENDS_DATA.following,FRIENDS_DATA.discover).indexOf(f)%3] || 'fav-purple';
+function renderPending() {
+  const mine = _pendingList.filter(f => f.isRequester);
+  const incoming = _pendingList.filter(f => !f.isRequester);
+  let html = '';
+  if (incoming.length) {
+    html += `<div style="padding:10px 16px 4px;font-size:12px;font-weight:700;color:var(--t2)">待确认申请</div>`;
+    html += incoming.map((f,i) => friendCard({
+      id: f.friendId, name: f.friendName, av: f.friendAvatar,
+      meta: '申请加你为好友', status: 'incoming', fsid: f.friendshipId,
+    }, i)).join('');
+  }
+  if (mine.length) {
+    html += `<div style="padding:10px 16px 4px;font-size:12px;font-weight:700;color:var(--t2)">已发送申请</div>`;
+    html += mine.map((f,i) => friendCard({
+      id: f.friendId, name: f.friendName, av: f.friendAvatar,
+      meta: '等待对方确认', status: 'pending', fsid: f.friendshipId,
+    }, i)).join('');
+  }
+  document.getElementById('followingList').innerHTML = html || `<div class="empty-state"><div class="ei">📬</div><p>暂无待处理申请</p></div>`;
+}
+
+function renderFeed() {
+  document.getElementById('feedList').innerHTML = `<div class="empty-state"><div class="ei">📰</div><p>动态功能即将上线</p></div>`;
+}
+
+function renderDiscover() {
+  const el = document.getElementById('discoverList');
+  if (!_discoverList.length) { el.innerHTML = `<div class="empty-state"><div class="ei">🔍</div><p>搜索用户昵称或手机号</p></div>`; return; }
+  el.innerHTML = _discoverList.map((u,i) => friendCard({
+    id: u.id, name: u.displayName, av: u.avatarEmoji || '👤',
+    meta: u.talent || '', status: u.relation?.status || 'none',
+    fsid: null,
+  }, i)).join('');
+}
+
+const FAV_CLASSES = ['fav-purple','fav-cyan','fav-pink'];
+function friendCard(f, idx=0) {
+  const avClass = FAV_CLASSES[idx % 3];
   let btn = '';
-  if (f.status === 'mutual') btn = `<button class="btn-sm btn-mutual" onclick="event.stopPropagation()">✓ 好友</button>`;
-  else if (f.status === 'following') btn = `<button class="btn-sm btn-following" onclick="toggleFollow('${f.id}',this)">已关注</button>`;
-  else btn = `<button class="btn-sm btn-follow" onclick="toggleFollow('${f.id}',this)">+ 关注</button>`;
-  return `<div class="friend-card">
+  const unreadBadge = f.unread > 0 ? `<span class="chat-unread">${f.unread}</span>` : '';
+  if (f.status === 'accepted') {
+    btn = `<button class="btn-sm btn-mutual" onclick="event.stopPropagation()">💬 聊天</button>`;
+  } else if (f.status === 'incoming') {
+    btn = `<button class="btn-sm btn-follow" onclick="event.stopPropagation();acceptFriend('${f.fsid}',this)">接受</button>`;
+  } else if (f.status === 'pending') {
+    btn = `<button class="btn-sm btn-following" onclick="event.stopPropagation()">待确认</button>`;
+  } else {
+    btn = `<button class="btn-sm btn-follow" onclick="event.stopPropagation();sendFriendReq('${f.id}',this)">+ 加好友</button>`;
+  }
+  const clickHandler = f.status === 'accepted' ? `onclick="openChat('${f.id}','${escHtml(f.name)}','${f.av}')"` : '';
+  return `<div class="friend-card" ${clickHandler}>
     <div class="fav ${avClass}">${f.av}</div>
     <div class="friend-info">
-      <div class="friend-name">${f.name}</div>
-      <div class="friend-meta">${f.meta} · ${f.skills} 个技能</div>
+      <div class="friend-name">${escHtml(f.name)} ${unreadBadge}</div>
+      <div class="friend-meta">${escHtml(f.meta)}</div>
     </div>
     <div class="friend-action">${btn}</div>
   </div>`;
 }
 
-function toggleFollow(uid, btn) {
-  if (btn.classList.contains('btn-follow')) {
-    btn.className = 'btn-sm btn-following';
-    btn.textContent = '已关注';
-    toast('关注成功！', 'success');
-    // update discover → following
-    const u = FRIENDS_DATA.discover.find(x=>x.id===uid);
-    if (u) { u.status='following'; FRIENDS_DATA.following.push(u); }
-  } else {
-    btn.className = 'btn-sm btn-follow';
-    btn.textContent = '+ 关注';
-    toast('已取消关注', 'info');
-  }
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function sendFriendReq(recipientId, btn) {
+  btn.disabled = true;
+  try {
+    await apiCall('POST', '/api/friends/request', { recipientId });
+    btn.textContent = '待确认'; btn.className = 'btn-sm btn-following';
+    toast('好友申请已发送', 'success');
+  } catch(e) { toast(e.message, 'error'); btn.disabled = false; }
+}
+
+async function acceptFriend(fsid, btn) {
+  btn.disabled = true;
+  try {
+    await apiCall('PATCH', `/api/friends/${fsid}`, { action: 'accept' });
+    toast('已接受好友申请', 'success');
+    rfriends();
+  } catch(e) { toast(e.message, 'error'); btn.disabled = false; }
+}
+
+function updateFriendBadge() {
+  const incoming = _pendingList.filter(f => !f.isRequester).length;
+  const unread = _friendsList.reduce((s,f) => s + (f.unreadCount||0), 0);
+  const total = incoming + unread;
+  const badge = document.getElementById('fbadge');
+  badge.style.display = total > 0 ? '' : 'none';
+  badge.textContent = total > 9 ? '9+' : total;
 }
 
 function switchSocialTab(idx) {
@@ -2196,22 +2270,90 @@ function switchSocialTab(idx) {
     if(sc) sc.style.display = i===idx ? '' : 'none';
   }
   currentSocialTab = idx;
+  if (idx === 2) renderFeed();
 }
 
-function searchUsers() {
+async function searchUsers() {
   const q = document.getElementById('friendSearch').value.trim();
   if(!q){toast('请输入搜索内容','error');return;}
-  // Switch to discover tab and show results
   switchSocialTab(3);
-  const all = FRIENDS_DATA.discover.filter(u=>u.name.includes(q)||u.meta.includes(q));
-  document.getElementById('discoverList').innerHTML = all.length
-    ? all.map(f=>friendCard(f)).join('')
-    : `<div class="empty-state"><div class="ei">🔍</div><p>未找到用户"${q}"</p></div>`;
+  document.getElementById('discoverList').innerHTML = `<div class="empty-state"><div class="ei">⏳</div><p>搜索中…</p></div>`;
+  try {
+    const data = await apiCall('GET', `/api/users/search?q=${encodeURIComponent(q)}`);
+    _discoverList = data.users || [];
+    renderDiscover();
+  } catch(e) {
+    document.getElementById('discoverList').innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${e.message}</p></div>`;
+  }
 }
 
 function filterFriends(q) {
-  if(!q) { renderDiscover(); return; }
+  if(!q && currentSocialTab === 0) renderMutual();
 }
+
+// ── CHAT
+let _chatFriendId = null;
+let _chatPollTimer = null;
+let _chatLastTs = null;
+
+function openChat(friendId, friendName, friendAvatar) {
+  _chatFriendId = friendId;
+  document.getElementById('chatBack').textContent = `‹ ${friendName}`;
+  document.getElementById('chatMsgs').innerHTML = `<div class="empty-state"><div class="ei">⏳</div><p>加载中…</p></div>`;
+  document.getElementById('chatInput').value = '';
+  gp('chat');
+  loadMessages();
+}
+
+async function loadMessages() {
+  if (!_chatFriendId) return;
+  try {
+    const data = await apiCall('GET', `/api/messages/${_chatFriendId}?limit=50`);
+    const msgs = data.messages || [];
+    renderMessages(msgs);
+    if (msgs.length) _chatLastTs = msgs[msgs.length-1].created_at;
+    // update unread badge
+    const f = _friendsList.find(x => x.friendId === _chatFriendId);
+    if (f) { f.unreadCount = 0; updateFriendBadge(); }
+  } catch(e) { /* silent */ }
+}
+
+function renderMessages(msgs) {
+  const myId = Auth.userId;
+  const container = document.getElementById('chatMsgs');
+  if (!msgs.length) {
+    container.innerHTML = `<div class="empty-state"><div class="ei">💬</div><p>暂无消息，发送第一条吧</p></div>`;
+    return;
+  }
+  container.innerHTML = msgs.map(m => {
+    const isMine = m.from_user_id === myId;
+    const timeStr = new Date(m.created_at).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+    return `<div class="msg-row${isMine?' mine':''}">
+      <div class="msg-av">${m.from_avatar||'👤'}</div>
+      <div>
+        <div class="msg-bubble">${escHtml(m.content)}</div>
+        <div class="msg-time">${timeStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+async function chatSend() {
+  const inp = document.getElementById('chatInput');
+  const content = inp.value.trim();
+  if (!content || !_chatFriendId) return;
+  inp.value = '';
+  try {
+    await apiCall('POST', '/api/messages', { toUserId: _chatFriendId, content });
+    loadMessages();
+  } catch(e) { toast(e.message, 'error'); inp.value = content; }
+}
+
+// Poll for new messages when in chat (every 3s)
+setInterval(() => {
+  if (document.getElementById('page-chat')?.classList.contains('active')) loadMessages();
+}, 3000);
 
 // ── MARKET RENDER
 function rmarket() {
