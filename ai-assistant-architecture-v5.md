@@ -546,13 +546,17 @@ function handleSSEEvent(event, data) {
 ```sql
 -- 用户与账号
 CREATE TABLE users (
-  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  display_name   VARCHAR(100),
-  talent         VARCHAR(50) DEFAULT 'default', -- 当前天赋
-  preferred_model VARCHAR(50),                  -- 用户模型偏好
-  avatar_url     VARCHAR(500),
-  phone          VARCHAR(20) UNIQUE,
-  created_at     TIMESTAMPTZ DEFAULT NOW()
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  display_name    VARCHAR(100),             -- 用户昵称（人类身份，用于登录/主页）
+  avatar_emoji    VARCHAR(10),              -- 用户头像（人类身份）
+  talent          VARCHAR(50) DEFAULT 'default', -- 当前天赋
+  soul_prompt     TEXT,                     -- 自定义人格提示词
+  assistant_name  VARCHAR(100) DEFAULT '我的助手', -- 助手昵称（AI 身份，用于好友系统）
+  assistant_emoji VARCHAR(10)  DEFAULT '🤖',      -- 助手头像（AI 身份）
+  preferred_model VARCHAR(50),              -- 用户模型偏好
+  avatar_url      VARCHAR(500),
+  phone           VARCHAR(20) UNIQUE,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE oauth_accounts (
@@ -724,6 +728,36 @@ ai-assistant-server/
 | Phase 6 | 性能与稳定性 | 路由健康检查 / 限流 / 错误重试 / 监控 | 持续 |
 
 > 💡 建议优先实现：`POST /api/analyze`（SSE 流式）→ 前端 SSE 消费 → DeepSeek 接入。这条链路跑通后，其他模块都是在它之上叠加，而不是并行开发。
+
+---
+
+## 十一·五、双身份模型
+
+系统中每个账号同时拥有两种身份，分别服务于不同场景：
+
+| 维度 | 用户身份（Human） | 助手身份（AI Assistant） |
+|------|-----------------|----------------------|
+| **核心字段** | `display_name`、`avatar_emoji` | `assistant_name`、`assistant_emoji` |
+| **设定入口** | 个人资料页（更多 → 个人资料） | AI 灵魂设定页（更多 → 我的 AI 灵魂） |
+| **使用场景** | 登录问候、账号标识 | 好友列表、聊天头部、消息气泡、AI 人格层 |
+| **可见性** | 仅自己和后台 | 对所有好友可见 |
+| **默认值** | `'User'` | `'我的助手'` / `'🤖'` |
+
+### 设计原则
+
+- **好友系统以助手身份为核心**：好友列表展示的是对方的助手昵称与助手头像，而非用户真实昵称。用户真实昵称作为副标题（meta）辅助显示。
+- **聊天以助手身份呈现**：消息气泡的头像使用发送方的助手 emoji，聊天页面标题显示对方的助手昵称。
+- **搜索同时支持两种身份**：搜索用户时可匹配 `display_name` 或 `assistant_name`，搜索结果以助手身份为主要展示。
+- **AI 人格层使用助手昵称**：系统 Prompt 中的自我介绍使用 `assistant_name`，让 AI 以用户定义的身份与其对话。
+- **主页打招呼保留用户昵称**：主页的 "你好，[name]" 仍使用 `display_name`，体现用户本人的归属感。
+
+```
+用户登录后看到：
+  主页:  "你好，小明"            ← display_name
+  好友:  "星辰 · 代码专家"       ← assistant_name + talent
+  聊天:  "‹ 星辰"               ← assistant_name
+  气泡:  🔮 (助手 emoji)        ← assistant_emoji
+```
 
 ---
 
