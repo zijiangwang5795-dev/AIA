@@ -1,6 +1,6 @@
 # 🤖 AI 助手 — 完整系统架构设计
 
-> v5.0 · 2025
+> v5.1 · 2026
 
 | 模块 | 技术选型 |
 |------|---------|
@@ -11,7 +11,197 @@
 | **语音** | Android SpeechRecognizer → Whisper |
 | **架构模式** | 前端 → 后端 → 大模型 · 两层大脑 |
 
-*包含：助手人格层 · 两层大脑架构 · 语音全链路 · 实时流式输出*
+*包含：助手人格层 · 两层大脑架构 · 语音全链路 · 实时流式输出 · 客户端技能分发 · 双身份系统*
+
+---
+
+## 零、核心交互流程
+
+> 本节描述系统**端到端完整流程**，是整个架构的枢纽视图。
+
+### 0.1 流程总图
+
+```
+用户说话
+    │
+    ▼
+┌─────────────────────────────────────────────────────────┐
+│  📱 客户端  (Android WebView)                           │
+│  Step 1. STT 语音转文字                                  │
+│    ├─ 引擎 A：Android SpeechRecognizer（原生，低延迟）   │
+│    └─ 引擎 B：Web Speech API（降级，浏览器环境）         │
+│                                                         │
+│  Step 2. 打包请求                                       │
+│    ├─ userText: "明天早上8点提醒我开会"                  │
+│    └─ clientSkills: [set_alarm, add_calendar_event, …]  │
+│         ↑ 当前设备支持的本地能力列表，随请求上报         │
+└───────────────────────┬─────────────────────────────────┘
+                        │  POST /api/analyze (HTTPS + JWT)
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│  🖥️ 后端  (Node.js / Fastify)                           │
+│                                                         │
+│  Step 3. 第一层大脑（确定性处理，~50ms）                 │
+│    ├─ 意图识别：client-alarm / analyze-voice / …        │
+│    ├─ 工具集确定：服务端工具（create_tasks / web_search）│
+│    └─ 模型路由：选择最优 LLM                             │
+│                                                         │
+│  Step 4. 人格层组装                                     │
+│    └─ Soul + Talent + Runtime + Memory → System Prompt  │
+│                                                         │
+│  Step 5. 第二层大脑：AI Agent ReAct 循环（SSE 流式）     │
+│                                                         │
+│    ┌──── ReAct 循环（最多 8 步）────────────────────┐   │
+│    │                                                │   │
+│    │  THINK  LLM 推理当前状态，选择下一步行动        │   │
+│    │    ↓                                          │   │
+│    │  ACT    调用工具（Function Calling）            │   │
+│    │    ├─ 后端技能（web_search / create_tasks…）   │   │
+│    │    │    → 在服务端直接执行，结果返回给 LLM      │   │
+│    │    └─ 客户端技能（set_alarm / make_phone_call）│   │
+│    │         → 不在服务端执行                       │   │
+│    │         → 发送 SSE event: client_action        │   │
+│    │         → LLM 收到"已下发给客户端"的回执       │   │
+│    │    ↓                                          │   │
+│    │  OBSERVE  获取工具结果，决定下一步              │   │
+│    │    ↓                                          │   │
+│    │  重复，直到 LLM 不再调用工具 或 达到最大步数    │   │
+│    └────────────────────────────────────────────────┘   │
+│                                                         │
+│  Step 6. 结果汇总                                       │
+│    ├─ 汇总所有工具执行结果和 LLM 最终回答               │
+│    ├─ 写审计日志 + 月度用量                             │
+│    └─ 异步生成情节记忆摘要 + 向量存储                   │
+└───────────────────────┬─────────────────────────────────┘
+                        │  SSE 实时推流
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│  📱 客户端  接收 SSE 事件流                             │
+│                                                         │
+│  event: step        → 更新进度指示器                    │
+│  event: text        → 实时显示 LLM 生成文字             │
+│  event: tool_start  → 日志：ACT xxx()                   │
+│  event: tool_done   → 日志：OBS xxx → 结果              │
+│  event: client_action → 执行客户端本地技能              │
+│    └─ AndroidBridge.executeClientSkill(name, argsJson)  │
+│         ├─ set_alarm → 调用系统闹钟 API                 │
+│         ├─ add_calendar_event → 调用系统日历 API        │
+│         ├─ make_phone_call → 拨打电话                   │
+│         └─ send_sms → 发送短信                          │
+│  event: task_extract → 显示提取到的任务卡片              │
+│  event: done        → 完成，显示统计（token/延迟/费用）  │
+│                                                         │
+│  Step 7. 最终呈现                                       │
+│    ├─ TTS 朗读 AI 回答（Android TextToSpeech）          │
+│    └─ 可视化：任务卡片、日志流、音波动画                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 0.2 SSE 事件规范
+
+| 事件类型 | 方向 | 数据结构 | 触发时机 |
+|----------|------|----------|---------|
+| `step` | 后端→前端 | `{type, step, label}` | 每个处理阶段开始 |
+| `text` | 后端→前端 | `{type, chunk}` | LLM 流式输出每个 token |
+| `tool_start` | 后端→前端 | `{type, name, args}` | Agent 开始调用工具 |
+| `tool_done` | 后端→前端 | `{type, name, result}` | 工具执行完成 |
+| `client_action` | 后端→前端 | `{type, name, args}` | Agent 调用客户端本地技能 |
+| `task_extract` | 后端→前端 | `{type, tasks[], summary}` | `create_tasks` 工具执行后 |
+| `error` | 后端→前端 | `{type, message}` | 任何错误 |
+| `done` | 后端→前端 | `{type, runId, totalTokens, latencyMs, costUsd, model}` | 全流程结束 |
+
+### 0.3 客户端技能（Client Skills）
+
+客户端每次请求时上报当前设备支持的本地能力（`clientSkills` 数组）。后端 Agent 将其纳入工具集。当 Agent 决策调用客户端技能时，通过 `client_action` SSE 事件下发，**不在服务端执行**。
+
+**已支持的客户端技能：**
+
+| 技能名 | 描述 | Android 实现 |
+|--------|------|-------------|
+| `set_alarm` | 设置闹钟/定时提醒 | `AlarmManager` |
+| `add_calendar_event` | 添加系统日历事件 | `CalendarProvider` |
+| `make_phone_call` | 拨打电话 | `Intent.ACTION_CALL` |
+| `send_sms` | 发送短信 | `SmsManager` |
+
+**Android Bridge 接口：**
+
+```java
+// Java 端需要实现此方法（供 JS 调用）
+@JavascriptInterface
+public void executeClientSkill(String skillName, String argsJson) {
+    JSONObject args = new JSONObject(argsJson);
+    switch (skillName) {
+        case "set_alarm":
+            setAlarm(args.getString("time"), args.getString("label"),
+                     args.optString("repeat", ""));
+            break;
+        case "add_calendar_event":
+            addCalendarEvent(args.getString("title"), args.getString("datetime"),
+                             args.optInt("duration_minutes", 60));
+            break;
+        case "make_phone_call":
+            makePhoneCall(args.getString("contact"));
+            break;
+        case "send_sms":
+            sendSms(args.getString("contact"), args.getString("message"));
+            break;
+    }
+}
+```
+
+### 0.4 请求体规范
+
+```json
+POST /api/analyze
+{
+  "text": "明天早上8点提醒我开会，会议室在3楼",
+  "clientSkills": [
+    {
+      "name": "set_alarm",
+      "description": "在设备上设置闹钟或定时提醒",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "time":   { "type": "string" },
+          "label":  { "type": "string" },
+          "repeat": { "type": "string" }
+        },
+        "required": ["time", "label"]
+      }
+    },
+    {
+      "name": "add_calendar_event",
+      "description": "在设备系统日历中添加日程事件",
+      "parameters": { ... }
+    }
+  ]
+}
+```
+
+**执行结果示例（SSE 流）：**
+
+```
+event: step
+data: {"type":"step","step":1,"label":"第一层：意图分析..."}
+
+event: step
+data: {"type":"step","step":2,"label":"路由完成 → deepseek-chat（client-alarm）[23ms]"}
+
+event: tool_start
+data: {"type":"tool_start","name":"set_alarm","args":{"time":"明天早上8点","label":"开会"}}
+
+event: client_action
+data: {"type":"client_action","name":"set_alarm","args":{"time":"明天早上8点","label":"开会"}}
+
+event: tool_done
+data: {"type":"tool_done","name":"set_alarm","result":{"dispatched":true,"message":"指令已下发至客户端执行：set_alarm"}}
+
+event: text
+data: {"type":"text","chunk":"好的，我已经帮你设置了明天早上8点的会议提醒！"}
+
+event: done
+data: {"type":"done","runId":"run_abc123","totalTokens":450,"latencyMs":1820,"costUsd":"0.000063","model":"deepseek-chat"}
+```
 
 ---
 

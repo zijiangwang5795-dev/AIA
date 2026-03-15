@@ -213,4 +213,19 @@ function getToolDefs(toolNames) {
   return toolNames.map(n => TOOL_DEFINITIONS[n]).filter(Boolean);
 }
 
-module.exports = { TOOL_DEFINITIONS, executeTool, getToolDefs };
+// ── 客户端技能转换（客户端上报的能力 → OpenAI function 格式）─
+function buildClientToolDefs(clientSkills) {
+  if (!Array.isArray(clientSkills)) return [];
+  return clientSkills
+    .filter(s => s && s.name && s.description)
+    .map(s => ({
+      type: 'function',
+      function: {
+        name: s.name,
+        description: s.description,
+        parameters: s.parameters || { type: 'object', properties: {} },
+      },
+    }));
+}
+
+module.exports = { TOOL_DEFINITIONS, executeTool, getToolDefs, buildClientToolDefs };

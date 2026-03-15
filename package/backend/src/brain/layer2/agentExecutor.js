@@ -89,7 +89,8 @@ async function callLLM({ model, systemPrompt, messages, tools, stream, onChunk }
 }
 
 // ── 主 Agent 执行器 ───────────────────────────────────
-async function runAgent({ userId, text, toolNames, model, routingRule, intent, send }) {
+async function runAgent({ userId, text, toolNames, model, routingRule, intent, send,
+  clientToolDefs = [], clientToolNames = new Set() }) {
   const runId = `run_${uuid().slice(0, 8)}`;
   const MAX_STEPS = 8;
   const messages = [];
@@ -112,8 +113,11 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
   // 第一层处理完成，通知前端
   send({ type: 'step', step: 2, label: `意图：${intent}，模型：${model}` });
 
-  // 获取工具定义
-  const tools = getToolDefs(toolNames || ['create_tasks', 'memory_search']);
+  // 获取工具定义（服务端工具 + 客户端上报的本地技能）
+  const tools = [
+    ...getToolDefs(toolNames || ['create_tasks', 'memory_search']),
+    ...clientToolDefs,
+  ];
 
   // 初始用户消息
   messages.push({ role: 'user', content: text });
@@ -159,10 +163,16 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
       send({ type: 'tool_start', name: tc.name, args: parsedArgs });
 
       let toolResult;
-      try {
-        toolResult = await executeTool(tc.name, parsedArgs, { userId, runId });
-      } catch (err) {
-        toolResult = { error: err.message };
+      if (clientToolNames.has(tc.name)) {
+        // 客户端技能：不在后端执行，将指令下发给客户端
+        send({ type: 'client_action', name: tc.name, args: parsedArgs });
+        toolResult = { dispatched: true, message: `指令已下发至客户端执行：${tc.name}` };
+      } else {
+        try {
+          toolResult = await executeTool(tc.name, parsedArgs, { userId, runId });
+        } catch (err) {
+          toolResult = { error: err.message };
+        }
       }
 
       send({ type: 'tool_done', name: tc.name, result: toolResult });
