@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS users (
   email           VARCHAR(255) UNIQUE,
   talent          VARCHAR(50) DEFAULT 'default',
   soul_prompt     TEXT,
+  assistant_name  VARCHAR(100) DEFAULT '我的助手',
+  assistant_emoji VARCHAR(10)  DEFAULT '🤖',
   preferred_model VARCHAR(50),
   is_searchable   BOOLEAN DEFAULT TRUE,
   created_at      TIMESTAMPTZ DEFAULT NOW(),

@@ -14,7 +14,7 @@ module.exports = async function friendsRoutes(app) {
 
     // 支持手机号精确搜索或昵称模糊搜索
     const res = await query(
-      `SELECT id, display_name, avatar_emoji, talent, created_at,
+      `SELECT id, display_name, avatar_emoji, talent, assistant_name, assistant_emoji, created_at,
               phone LIKE $2 AS phone_match
        FROM users
        WHERE is_searchable = TRUE
@@ -22,6 +22,7 @@ module.exports = async function friendsRoutes(app) {
          AND (
            phone = $3
            OR display_name ILIKE $4
+           OR assistant_name ILIKE $4
          )
        LIMIT 20`,
       [req.user.sub, `${q}%`, q, `%${q}%`]
@@ -52,6 +53,8 @@ module.exports = async function friendsRoutes(app) {
         displayName: u.display_name,
         avatarEmoji: u.avatar_emoji || '👤',
         talent: u.talent,
+        assistantName: u.assistant_name || u.display_name,
+        assistantEmoji: u.assistant_emoji || '🤖',
         relation: relations[u.id] || null,
       }))
     };
@@ -74,7 +77,9 @@ module.exports = async function friendsRoutes(app) {
          CASE WHEN f.requester_id=$1 THEN u2.id ELSE u1.id END AS friend_id,
          CASE WHEN f.requester_id=$1 THEN u2.display_name ELSE u1.display_name END AS friend_name,
          CASE WHEN f.requester_id=$1 THEN u2.avatar_emoji ELSE u1.avatar_emoji END AS friend_avatar,
-         CASE WHEN f.requester_id=$1 THEN u2.talent ELSE u1.talent END AS friend_talent
+         CASE WHEN f.requester_id=$1 THEN u2.talent ELSE u1.talent END AS friend_talent,
+         CASE WHEN f.requester_id=$1 THEN u2.assistant_name ELSE u1.assistant_name END AS friend_assistant_name,
+         CASE WHEN f.requester_id=$1 THEN u2.assistant_emoji ELSE u1.assistant_emoji END AS friend_assistant_emoji
        FROM friendships f
        JOIN users u1 ON u1.id = f.requester_id
        JOIN users u2 ON u2.id = f.recipient_id
@@ -102,6 +107,8 @@ module.exports = async function friendsRoutes(app) {
         friendName: r.friend_name,
         friendAvatar: r.friend_avatar || '👤',
         friendTalent: r.friend_talent,
+        assistantName: r.friend_assistant_name || r.friend_name,
+        assistantEmoji: r.friend_assistant_emoji || r.friend_avatar || '🤖',
         status: r.status,
         isRequester: r.requester_id === req.user.sub,
         unreadCount: unread[r.friend_id] || 0,
@@ -197,6 +204,8 @@ module.exports = async function friendsRoutes(app) {
       displayName: u.display_name,
       avatarEmoji: u.avatar_emoji || '👤',
       talent: u.talent,
+      assistantName: u.assistant_name || '我的助手',
+      assistantEmoji: u.assistant_emoji || '🤖',
       isFriend,
     };
 
@@ -260,7 +269,8 @@ module.exports = async function friendsRoutes(app) {
     if (before) params.push(new Date(before));
 
     const res = await query(
-      `SELECT m.*, u.display_name as from_name, u.avatar_emoji as from_avatar
+      `SELECT m.*, u.display_name as from_name, u.avatar_emoji as from_avatar,
+              COALESCE(u.assistant_emoji, u.avatar_emoji, '🤖') as from_assistant_emoji
        FROM messages m
        JOIN users u ON u.id = m.from_user_id
        WHERE (

@@ -794,6 +794,24 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <div class="pgsub" style="margin-bottom:20px">定义你的 AI 助手的天赋与个性</div>
 
       <div class="card">
+        <div class="ctitle">助手身份</div>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:12px">在好友系统中展示的助手名称与头像</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="assistantEmojiPicker">
+          <!-- rendered by JS -->
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <div style="font-size:13px;color:var(--t2)">自定义：</div>
+          <input class="inp" id="assistantEmojiCustom" maxlength="4" style="width:70px;font-size:22px;text-align:center" placeholder="🤖" oninput="renderAssistantEmojiPicker(this.value)">
+        </div>
+        <div class="istack">
+          <div>
+            <div class="ilabel">助手昵称</div>
+            <input class="inp" id="assistantNameInp" placeholder="给你的助手起个名字" maxlength="20">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="ctitle">天赋类型</div>
         <div style="font-size:12px;color:var(--t2);margin-bottom:12px">决定助手的核心能力倾向</div>
         <div id="talentGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
@@ -2194,6 +2212,10 @@ async function loadSoulPage() {
     renderTalentGrid();
     document.getElementById('soulPromptInp').value = data.soulPrompt || '';
     document.getElementById('preferredModelInp').value = data.preferredModel || '';
+    document.getElementById('assistantNameInp').value = data.assistantName || '';
+    const aEmoji = data.assistantEmoji || '🤖';
+    document.getElementById('assistantEmojiCustom').value = aEmoji;
+    renderAssistantEmojiPicker(aEmoji);
   } catch(e) {
     toast('加载失败：' + e.message, 'error');
   }
@@ -2233,15 +2255,35 @@ function soulPreset(key) {
 async function saveSoul() {
   const soulPrompt = document.getElementById('soulPromptInp').value.trim();
   const preferredModel = document.getElementById('preferredModelInp').value;
+  const assistantName = document.getElementById('assistantNameInp').value.trim();
+  const assistantEmoji = document.getElementById('assistantEmojiCustom').value.trim() || '🤖';
+  if (!assistantName) { toast('助手昵称不能为空', 'error'); return; }
   try {
     const data = await apiCall('PUT', '/auth/profile', {
       talent: _selectedTalent,
       soulPrompt: soulPrompt || null,
+      assistantName,
+      assistantEmoji,
       preferredModel: preferredModel || null,
     });
     _currentProfile = { ..._currentProfile, ...data };
     toast('灵魂设定已保存 ✨', 'success');
   } catch(e) { toast(e.message, 'error'); }
+}
+
+const ASSISTANT_EMOJI_OPTIONS = ['🤖','🧠','⭐','🔮','🌟','💡','🎯','🦾','🦋','🌈','🎭','🌙','⚡','🔥','💎','🚀'];
+
+function renderAssistantEmojiPicker(current) {
+  const cur = current || document.getElementById('assistantEmojiCustom')?.value || '🤖';
+  document.getElementById('assistantEmojiPicker').innerHTML = ASSISTANT_EMOJI_OPTIONS.map(em => `
+    <div onclick="pickAssistantEmoji('${em}')" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;
+      justify-content:center;font-size:22px;cursor:pointer;border:2px solid ${em===cur?'var(--ac)':'var(--bd)'};
+      background:${em===cur?'rgba(124,111,255,.1)':'var(--s2)'};">${em}</div>`).join('');
+}
+
+function pickAssistantEmoji(em) {
+  document.getElementById('assistantEmojiCustom').value = em;
+  renderAssistantEmojiPicker(em);
 }
 
 const AVATAR_OPTIONS = ['👤','😀','😎','🧑‍💻','👩‍🎨','🧑‍🔬','🧑‍💼','🦊','🐱','🐼','🦁','🌙','⚡','🚀','🎯','💎'];
@@ -2387,8 +2429,11 @@ function renderMutual() {
   const el = document.getElementById('mutualList');
   if (!_friendsList.length) { el.innerHTML = `<div class="empty-state"><div class="ei">👥</div><p>暂无好友，搜索添加吧</p></div>`; return; }
   el.innerHTML = _friendsList.map((f,i) => friendCard({
-    id: f.friendId, name: f.friendName, av: f.friendAvatar,
-    meta: f.friendTalent || '', unread: f.unreadCount || 0,
+    id: f.friendId,
+    name: f.assistantName || f.friendName,
+    av: f.assistantEmoji || f.friendAvatar,
+    meta: f.friendName || '',
+    unread: f.unreadCount || 0,
     status: 'accepted', fsid: f.friendshipId,
   }, i)).join('');
 }
@@ -2400,14 +2445,18 @@ function renderPending() {
   if (incoming.length) {
     html += `<div style="padding:10px 16px 4px;font-size:12px;font-weight:700;color:var(--t2)">待确认申请</div>`;
     html += incoming.map((f,i) => friendCard({
-      id: f.friendId, name: f.friendName, av: f.friendAvatar,
+      id: f.friendId,
+      name: f.assistantName || f.friendName,
+      av: f.assistantEmoji || f.friendAvatar,
       meta: '申请加你为好友', status: 'incoming', fsid: f.friendshipId,
     }, i)).join('');
   }
   if (mine.length) {
     html += `<div style="padding:10px 16px 4px;font-size:12px;font-weight:700;color:var(--t2)">已发送申请</div>`;
     html += mine.map((f,i) => friendCard({
-      id: f.friendId, name: f.friendName, av: f.friendAvatar,
+      id: f.friendId,
+      name: f.assistantName || f.friendName,
+      av: f.assistantEmoji || f.friendAvatar,
       meta: '等待对方确认', status: 'pending', fsid: f.friendshipId,
     }, i)).join('');
   }
@@ -2422,8 +2471,11 @@ function renderDiscover() {
   const el = document.getElementById('discoverList');
   if (!_discoverList.length) { el.innerHTML = `<div class="empty-state"><div class="ei">🔍</div><p>搜索用户昵称或手机号</p></div>`; return; }
   el.innerHTML = _discoverList.map((u,i) => friendCard({
-    id: u.id, name: u.displayName, av: u.avatarEmoji || '👤',
-    meta: u.talent || '', status: u.relation?.status || 'none',
+    id: u.id,
+    name: u.assistantName || u.displayName,
+    av: u.assistantEmoji || u.avatarEmoji || '🤖',
+    meta: u.displayName || '',
+    status: u.relation?.status || 'none',
     fsid: null,
   }, i)).join('');
 }
@@ -2517,6 +2569,7 @@ let _chatLastTs = null;
 
 function openChat(friendId, friendName, friendAvatar) {
   _chatFriendId = friendId;
+  // friendName here is assistant name (primary identity in friends system)
   document.getElementById('chatBack').textContent = `‹ ${friendName}`;
   document.getElementById('chatMsgs').innerHTML = `<div class="empty-state"><div class="ei">⏳</div><p>加载中…</p></div>`;
   document.getElementById('chatInput').value = '';
@@ -2548,7 +2601,7 @@ function renderMessages(msgs) {
     const isMine = m.from_user_id === myId;
     const timeStr = new Date(m.created_at).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
     return `<div class="msg-row${isMine?' mine':''}">
-      <div class="msg-av">${m.from_avatar||'👤'}</div>
+      <div class="msg-av">${m.from_assistant_emoji||m.from_avatar||'🤖'}</div>
       <div>
         <div class="msg-bubble">${escHtml(m.content)}</div>
         <div class="msg-time">${timeStr}</div>

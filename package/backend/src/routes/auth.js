@@ -147,6 +147,8 @@ module.exports = async function authRoutes(app) {
       email: u.email,
       talent: u.talent,
       soulPrompt: u.soul_prompt,
+      assistantName: u.assistant_name || '我的助手',
+      assistantEmoji: u.assistant_emoji || '🤖',
       preferredModel: u.preferred_model,
       isSearchable: u.is_searchable,
     };
@@ -159,17 +161,19 @@ module.exports = async function authRoutes(app) {
       catch { reply.code(401).send({ error: 'Unauthorized' }); }
     }]
   }, async (req) => {
-    const { displayName, avatarEmoji, talent, soulPrompt, preferredModel, isSearchable } = req.body || {};
+    const { displayName, avatarEmoji, talent, soulPrompt, assistantName, assistantEmoji, preferredModel, isSearchable } = req.body || {};
     const res = await query(
       `UPDATE users SET
          display_name    = COALESCE($2, display_name),
          avatar_emoji    = COALESCE($3, avatar_emoji),
          talent          = COALESCE($4, talent),
          soul_prompt     = COALESCE($5, soul_prompt),
-         preferred_model = COALESCE($6, preferred_model),
-         is_searchable   = COALESCE($7, is_searchable)
+         assistant_name  = COALESCE($6, assistant_name),
+         assistant_emoji = COALESCE($7, assistant_emoji),
+         preferred_model = COALESCE($8, preferred_model),
+         is_searchable   = COALESCE($9, is_searchable)
        WHERE id=$1 RETURNING *`,
-      [req.user.sub, displayName, avatarEmoji, talent, soulPrompt, preferredModel, isSearchable]
+      [req.user.sub, displayName, avatarEmoji, talent, soulPrompt, assistantName, assistantEmoji, preferredModel, isSearchable]
     );
     const u = res.rows[0];
     return {
@@ -178,6 +182,8 @@ module.exports = async function authRoutes(app) {
       avatarEmoji: u.avatar_emoji || '👤',
       talent: u.talent,
       soulPrompt: u.soul_prompt,
+      assistantName: u.assistant_name || '我的助手',
+      assistantEmoji: u.assistant_emoji || '🤖',
       preferredModel: u.preferred_model,
       isSearchable: u.is_searchable,
     };
