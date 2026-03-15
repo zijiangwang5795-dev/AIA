@@ -1,6 +1,6 @@
 'use strict';
 const { query } = require('../db/client');
-const { requireAuth } = require('../auth/middleware');
+const { authMiddleware: requireAuth } = require('../auth/middleware');
 
 module.exports = async function pushRoutes(app) {
 
