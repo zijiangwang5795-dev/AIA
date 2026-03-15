@@ -36,7 +36,7 @@ module.exports = async function feedbackRoutes(app) {
 
   // ── 获取用户自己的反馈历史 ────────────────────────
   app.get('/feedback/mine', {
-    preHandler: [require('../auth/middleware').requireAuth],
+    preHandler: [require('../auth/middleware').authMiddleware],
   }, async (req, reply) => {
     const res = await query(`
       SELECT id, type, content, status, created_at
