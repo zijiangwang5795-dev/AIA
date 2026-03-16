@@ -1549,12 +1549,10 @@ function renderAll(){rdash();rtasks();rskills();rmem();raudit();rauth();rmodels(
 //
 // 注意：window.API_BASE 由 Android WebViewClient.onPageFinished 注入，
 // 不能在模块顶层直接读（DOMContentLoaded 时注入尚未完成）。
-// 改为函数懒读取，每次请求时动态取值。
+// 改为函数懒读取，每次请求时动态取值；浏览器直接打开时 fallback 到 localhost。
 function getApiBase() {
   return window.API_BASE || 'http://localhost:3000';
 }
-// 兼容直接引用 API_BASE 的旧代码（浏览器直接打开时走此默认值）
-let API_BASE = 'http://localhost:3000';
 
 // ── Token 管理 ─────────────────────────────────────────
 const Auth = {
@@ -1628,7 +1626,6 @@ let nativeSpeechReady = false;
 // Android WebViewClient.onPageFinished 注入 API_BASE 后回调
 // 此时 window.API_BASE 已经有值，可以安全启动 initApp
 window.onAndroidBridgeReady = function() {
-  API_BASE = window.API_BASE || API_BASE;  // 同步更新模块级变量
   initApp();
 };
 
