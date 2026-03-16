@@ -1,6 +1,7 @@
 'use strict';
 const { layer1Process } = require('../brain/layer1');
 const { runAgent } = require('../brain/layer2/agentExecutor');
+const { buildClientToolDefs } = require('../tools/registry');
 const { optionalAuth } = require('../auth/middleware');
 const { checkQuota, incrementUsage } = require('../middleware/quota');
 
@@ -10,13 +11,17 @@ module.exports = async function analyzeRoutes(app) {
   app.post('/analyze', {
     preHandler: [optionalAuth, checkQuota],
   }, async (req, reply) => {
-    const { text, skillType } = req.body || {};
+    const { text, skillType, clientSkills } = req.body || {};
 
     if (!text || !text.trim()) {
       return reply.code(400).send({ error: 'text is required' });
     }
 
     const userId = req.userId;
+
+    // 构建客户端技能工具定义（来自客户端上报的本地能力）
+    const clientToolDefs = buildClientToolDefs(clientSkills);
+    const clientToolNames = new Set(clientToolDefs.map(d => d.function.name));
 
     // 设置 SSE Headers
     reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -56,6 +61,8 @@ module.exports = async function analyzeRoutes(app) {
         model: layer1.selectedModel,
         routingRule: layer1.selectedRule,
         intent: layer1.intent,
+        clientToolDefs,   // 来自客户端的本地技能定义
+        clientToolNames,  // 用于判断哪些 tool call 应下发给客户端
         send,
       });
 

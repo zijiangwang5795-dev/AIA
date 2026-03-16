@@ -1314,6 +1314,85 @@ async function apiCall(method, path, body) {
   return data;
 }
 
+// ══════════════════ CLIENT SKILLS — 客户端本地技能（Android 设备能力）
+// 定义本客户端支持的本地技能，随每次 analyze 请求上报给后端
+// 后端 Agent 可调用这些技能，调用时后端不执行，而是通过 SSE client_action 事件下发给客户端
+const CLIENT_SKILLS = [
+  {
+    name: 'set_alarm',
+    description: '在设备上设置闹钟或定时提醒。当用户说"提醒我XX点做某事"、"定个闹钟"时调用。',
+    parameters: {
+      type: 'object',
+      properties: {
+        time:   { type: 'string', description: '提醒时间，例如：明天早上8点、2026-03-15 09:00' },
+        label:  { type: 'string', description: '闹钟/提醒标签，描述要做的事' },
+        repeat: { type: 'string', description: '重复规则：每天、工作日、每周一…（可选）' },
+      },
+      required: ['time', 'label'],
+    },
+  },
+  {
+    name: 'add_calendar_event',
+    description: '在设备系统日历中添加日程事件。当用户提到"约会"、"会议"、"日程"时调用。',
+    parameters: {
+      type: 'object',
+      properties: {
+        title:            { type: 'string', description: '日程标题' },
+        datetime:         { type: 'string', description: '开始时间，例如：明天下午3点' },
+        duration_minutes: { type: 'number', description: '持续时长（分钟），默认60' },
+        location:         { type: 'string', description: '地点（可选）' },
+        note:             { type: 'string', description: '备注说明（可选）' },
+      },
+      required: ['title', 'datetime'],
+    },
+  },
+  {
+    name: 'make_phone_call',
+    description: '拨打电话。当用户说"打电话给XXX"、"拨打XXXX"时调用。',
+    parameters: {
+      type: 'object',
+      properties: {
+        contact: { type: 'string', description: '联系人姓名或电话号码' },
+      },
+      required: ['contact'],
+    },
+  },
+  {
+    name: 'send_sms',
+    description: '发送短信。当用户说"发短信给XXX说…"时调用。',
+    parameters: {
+      type: 'object',
+      properties: {
+        contact: { type: 'string', description: '联系人姓名或手机号' },
+        message: { type: 'string', description: '短信内容' },
+      },
+      required: ['contact', 'message'],
+    },
+  },
+];
+
+// 获取当前设备实际可用的客户端技能（AndroidBridge 存在时全部可用，否则仅保留通知技能）
+function getAvailableClientSkills() {
+  if (window.AndroidBridge) return CLIENT_SKILLS;
+  // 非 Android 环境：不上报客户端技能（无法执行）
+  return [];
+}
+
+// 执行客户端技能（由后端 SSE client_action 事件触发）
+function executeClientAction(name, args) {
+  try {
+    if (window.AndroidBridge && window.AndroidBridge.executeClientSkill) {
+      // Android: 调用统一入口，Java 层负责分发
+      window.AndroidBridge.executeClientSkill(name, JSON.stringify(args));
+      return;
+    }
+    // 降级：Web 环境仅做通知提示
+    toast(`📱 客户端指令：${name}（${JSON.stringify(args)}）`, 'info');
+  } catch(e) {
+    console.warn('executeClientAction failed:', e);
+  }
+}
+
 // ══════════════════ SPEECH — 双引擎：AndroidBridge 优先，降级到 Web Speech API
 let recognition = null;       // Web Speech API 实例（浏览器用）
 let speechSupported = false;  // 任一引擎可用时为 true
@@ -1622,7 +1701,7 @@ async function analyze() {
     const resp = await fetch(`${API_BASE}/api/analyze`, {
       method: 'POST',
       headers: Auth.headers(),
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, clientSkills: getAvailableClientSkills() }),
     });
 
     if (!resp.ok) {
@@ -1687,6 +1766,12 @@ async function analyze() {
 
           case 'tool_done':
             alog(logEl, `OBS    ${data.name} → ${JSON.stringify(data.result || {}).slice(0, 80)}`, 'lo');
+            break;
+
+          case 'client_action':
+            // 后端 Agent 决策需要调用客户端本地技能
+            alog(logEl, `📱 CLIENT ${data.name}(${JSON.stringify(data.args || {}).slice(0, 60)})`, 'la');
+            executeClientAction(data.name, data.args || {});
             break;
 
           case 'task_extract':

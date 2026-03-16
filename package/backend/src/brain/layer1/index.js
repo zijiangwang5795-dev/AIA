@@ -3,6 +3,12 @@ const { query } = require('../../db/client');
 
 // ── 意图分类规则 ─────────────────────────────────────
 const INTENT_RULES = [
+  // 客户端本地技能（优先识别，因为关键词更具体）
+  { pattern: /闹钟|定时提醒|提醒我.*(点|时)|(.*(点|时).*提醒|叫我)/, intent: 'client-alarm', confidence: 0.95 },
+  { pattern: /日历|日程|会议|约.*(时间|见面)|添加.*日程|创建.*日程/, intent: 'client-calendar', confidence: 0.92 },
+  { pattern: /打电话|拨打|给.*打电话|拨号/, intent: 'client-call', confidence: 0.95 },
+  { pattern: /发短信|短信给|发条消息给/, intent: 'client-sms', confidence: 0.92 },
+  // 后端技能
   { pattern: /提取|任务|待办|安排|记一下|记录|要做|需要做|帮我做/, intent: 'analyze-voice', confidence: 0.9 },
   { pattern: /AI.*(新闻|动态|资讯|进展)|今日热点|最新.*AI/, intent: 'ai-news', confidence: 0.9 },
   { pattern: /日报|周报|总结|汇报|报告/, intent: 'daily-brief', confidence: 0.9 },
@@ -52,12 +58,17 @@ const ROUTING_RULES = [
 ];
 
 // ── 技能 → 工具映射 ──────────────────────────────────
+// 注：客户端意图（client-*）不需要服务端工具；客户端技能定义由前端动态上报
 const SKILL_TOOL_MAP = {
-  'ai-news':      ['web_search', 'create_tasks', 'save_memory'],
-  'analyze-voice':['create_tasks', 'memory_search', 'save_memory'],
-  'daily-brief':  ['memory_search', 'get_tasks'],
-  'deep-analysis':['web_search', 'memory_search', 'calculator'],
-  'default':      ['create_tasks', 'memory_search'],
+  'ai-news':        ['web_search', 'create_tasks', 'save_memory'],
+  'analyze-voice':  ['create_tasks', 'memory_search', 'save_memory'],
+  'daily-brief':    ['memory_search', 'get_tasks'],
+  'deep-analysis':  ['web_search', 'memory_search', 'calculator'],
+  'client-alarm':   ['create_tasks'],   // 同时创建任务记录
+  'client-calendar':['create_tasks'],   // 同时创建任务记录
+  'client-call':    [],
+  'client-sms':     [],
+  'default':        ['create_tasks', 'memory_search'],
 };
 
 // ── 第一层大脑主处理函数 ─────────────────────────────
