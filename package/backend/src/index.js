@@ -58,10 +58,8 @@ app.setNotFoundHandler((req, reply) => {
 // ── 启动 ──────────────────────────────────────────────
 const start = async () => {
   try {
-    const { db } = require('./db/client');
-    await db.connect().catch(e => {
-      app.log.warn('DB connect error (tables may not exist yet): ' + e.message);
-    });
+    const { migrate } = require('./db/migrate');
+    await migrate();
 
     const port = parseInt(process.env.PORT || '3000');
     const host = process.env.HOST || '0.0.0.0';
