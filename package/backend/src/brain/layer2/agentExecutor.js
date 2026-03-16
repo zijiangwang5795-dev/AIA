@@ -3,28 +3,25 @@ const { v4: uuid } = require('uuid');
 const { query } = require('../../db/client');
 const { assembleSystemPrompt } = require('../../personality/assembler');
 const { executeTool, getToolDefs } = require('../../tools/registry');
+const { resolveApiKey, resolveBaseUrl, getRuntimeConfig } = require('../../config/runtime');
 
 // ── 模型适配器（统一调用接口）───────────────────────
 async function callLLM({ model, systemPrompt, messages, tools, stream, onChunk }) {
-  const isDeepSeek = model.startsWith('deepseek');
-  const isAnthropic = model.startsWith('claude');
+  // 优先使用运行时配置（调试覆盖），其次回退到 .env
+  const rtCfg = getRuntimeConfig();
+  const effectiveModel = rtCfg.aiModel || model;
 
-  const apiKey = isDeepSeek
-    ? process.env.DEEPSEEK_API_KEY
-    : isAnthropic
-      ? process.env.ANTHROPIC_API_KEY
-      : process.env.OPENAI_API_KEY;
+  const apiKey = resolveApiKey(effectiveModel);
+  if (!apiKey) throw new Error(`No API key configured for model: ${effectiveModel}`);
 
-  if (!apiKey) throw new Error(`No API key configured for model: ${model}`);
-
-  const baseURL = isDeepSeek ? 'https://api.deepseek.com' : 'https://api.openai.com';
+  const baseURL = resolveBaseUrl(effectiveModel);
 
   const { OpenAI } = require('openai');
   const client = new OpenAI({ apiKey, baseURL });
 
   const startTime = Date.now();
   const params = {
-    model,
+    model: effectiveModel,
     messages: [{ role: 'system', content: systemPrompt }, ...messages],
     ...(tools?.length ? { tools, tool_choice: 'auto' } : {}),
     temperature: 0.7,
