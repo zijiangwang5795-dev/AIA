@@ -1817,7 +1817,7 @@ function quickRec() {
     document.getElementById('homeRecStatus').textContent = '准备就绪 ·';
     stopSpeech();
     const txt = document.getElementById('vtext').value.trim();
-    if (txt) { gp('voice'); toast('录音完成，可点击分析', 'info'); }
+    if (txt) { gp('voice'); sl(300).then(() => analyze()); }
   }
 }
 
@@ -1845,7 +1845,11 @@ function stopRec() {
   document.getElementById('recLabel').textContent = '点击开始';
   document.getElementById('recTimer').textContent = '';
   stopSpeech();
-  if (S.recS > 0) toast(`录音 ${S.recS}s 完成，点击 AI 分析`, 'info');
+  // 有内容则自动触发分析
+  const txt = document.getElementById('vtext').value.trim();
+  if (txt) {
+    sl(300).then(() => analyze());
+  }
 }
 
 function toggleRec() {
