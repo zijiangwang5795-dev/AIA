@@ -28,8 +28,12 @@ public class AIAWebViewClient extends WebViewClient {
         super.onPageFinished(view, url);
         // 注入 API_BASE 变量（覆盖 JS 中的默认值）
         String safeBase = apiBase.replace("\"", "\\\"");
+        // 1. 注入 API_BASE
+        // 2. 通知前端 API_BASE 已就绪，触发 initApp（onAndroidBridgeReady）
+        // 3. 如果语音也可用，同时触发语音初始化
         String script =
                 "window.API_BASE = \"" + safeBase + "\";\n" +
+                "window.onAndroidBridgeReady && window.onAndroidBridgeReady();\n" +
                 "if (typeof AndroidBridge !== 'undefined' && AndroidBridge.isSpeechAvailable()) {\n" +
                 "    window.onNativeSpeechReady && window.onNativeSpeechReady();\n" +
                 "}";
