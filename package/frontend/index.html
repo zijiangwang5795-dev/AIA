@@ -1547,12 +1547,14 @@ function renderAll(){rdash();rtasks();rskills();rmem();raudit();rauth();rmodels(
 // 局域网（手机访问电脑）：'http://192.168.x.x:3000'
 // 生产环境：'https://your-domain.com'
 //
-// 优先级：Android 注入的 window.API_BASE > localStorage > 默认 localhost
-// 浏览器调试时可在控制台执行：
-//   localStorage.setItem('api_base', 'http://192.168.1.100:3000')
-// 然后刷新页面即可连接局域网后端。
+// 优先级：Android 注入的 window.API_BASE > window.location.origin > localhost 兜底
+// 浏览器访问 http://192.168.1.100:3000 时自动用该地址作为 API_BASE，无需任何配置。
+// Android WebView 加载 file:// 时 location.origin 为 "file://"，由 window.API_BASE 覆盖。
 function getApiBase() {
-  return window.API_BASE || localStorage.getItem('api_base') || 'http://localhost:3000';
+  if (window.API_BASE) return window.API_BASE;
+  const origin = window.location.origin;
+  if (origin && origin !== 'null' && !origin.startsWith('file://')) return origin;
+  return 'http://localhost:3000';
 }
 
 // ── Token 管理 ─────────────────────────────────────────
