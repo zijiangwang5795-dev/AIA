@@ -275,9 +275,14 @@ async function migrate() {
     } else {
       throw err;
     }
-  } finally {
-    await db.end();
   }
 }
 
-migrate().catch(console.error);
+// 支持直接执行：node migrate.js
+if (require.main === module) {
+  migrate()
+    .then(() => db.end())
+    .catch(e => { console.error(e); db.end(); process.exit(1); });
+}
+
+module.exports = { migrate };
