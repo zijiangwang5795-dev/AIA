@@ -248,10 +248,15 @@ INSERT INTO users (id, display_name, email) VALUES
 INSERT INTO skills (user_id, name, emoji, description, builtin_type, allowed_tools, is_builtin) VALUES
   ('00000000-0000-0000-0000-000000000001', 'AI新闻整理', '📰', '搜索整理当天最重要的AI行业新闻', 'ai-news', ARRAY['web_search','create_tasks'], true),
   ('00000000-0000-0000-0000-000000000001', '智能日报', '📊', '根据今日任务生成工作日报', 'daily-brief', ARRAY['memory_search'], true),
-  ('00000000-0000-0000-0000-000000000001', '语音分析', '🎙️', '分析语音内容，提取任务和待办', 'analyze-voice', ARRAY['create_tasks','memory_search'], true)
+  ('00000000-0000-0000-0000-000000000001', '语音分析', '🎙️', '分析语音内容，提取任务和待办', 'analyze-voice', ARRAY['create_tasks','memory_search'], true),
+  ('00000000-0000-0000-0000-000000000001', '发消息给好友', '💬', '让助手代为向好友发送消息，由对方助手通知其用户', 'send-friend-message', ARRAY['send_friend_message'], true)
   ON CONFLICT DO NOTHING;
 
 -- ── 增量迁移：给已有表追加新列（IF NOT EXISTS 保证幂等）────
+-- 消息表：记录发送者类型（user=用户直接发 / assistant=助手代发）
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_type VARCHAR(20) DEFAULT 'user';
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS sender_name VARCHAR(100);
+
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_emoji    VARCHAR(10)  DEFAULT '👤';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url      VARCHAR(500);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS talent          VARCHAR(50)  DEFAULT 'default';

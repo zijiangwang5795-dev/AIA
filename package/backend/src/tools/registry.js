@@ -108,6 +108,22 @@ const TOOL_DEFINITIONS = {
       },
     },
   },
+
+  send_friend_message: {
+    type: 'function',
+    function: {
+      name: 'send_friend_message',
+      description: '由助手代替用户向好友发送消息。消息会显示为"来自 [助手名]"，并通过推送通知提醒对方。适用于"帮我告诉张三…""发消息给李四说…"等场景。',
+      parameters: {
+        type: 'object',
+        properties: {
+          friendName: { type: 'string', description: '好友的昵称或姓名（用于搜索匹配）' },
+          message:    { type: 'string', description: '要发送的消息内容' },
+        },
+        required: ['friendName', 'message'],
+      },
+    },
+  },
 };
 
 // ── 工具执行函数 ──────────────────────────────────────
@@ -201,6 +217,63 @@ async function executeTool(name, args, context = {}) {
       } catch {
         return { error: 'Invalid expression', expression: args.expression };
       }
+    }
+
+    case 'send_friend_message': {
+      const { friendName, message } = args;
+      if (!userId) return { error: 'userId required' };
+
+      // 查找当前用户信息（助手名）
+      const senderRes = await query(
+        `SELECT display_name, assistant_name, assistant_emoji FROM users WHERE id=$1`,
+        [userId]
+      );
+      const sender = senderRes.rows[0];
+      const assistantName = sender?.assistant_name || '我的助手';
+      const assistantEmoji = sender?.assistant_emoji || '🤖';
+
+      // 按昵称模糊匹配好友
+      const friendRes = await query(
+        `SELECT u.id, u.display_name, u.assistant_name
+         FROM friendships f
+         JOIN users u ON u.id = CASE WHEN f.requester_id=$1 THEN f.recipient_id ELSE f.requester_id END
+         WHERE (f.requester_id=$1 OR f.recipient_id=$1)
+           AND f.status='accepted'
+           AND u.display_name ILIKE $2
+         LIMIT 1`,
+        [userId, `%${friendName}%`]
+      );
+
+      if (!friendRes.rows.length) {
+        return { error: `未找到好友"${friendName}"，请确认昵称或先添加好友` };
+      }
+      const friend = friendRes.rows[0];
+
+      // 存消息，标记为助手代发
+      await query(
+        `INSERT INTO messages (from_user_id, to_user_id, content, sender_type, sender_name)
+         VALUES ($1, $2, $3, 'assistant', $4)`,
+        [userId, friend.id, message, `${assistantEmoji} ${assistantName}`]
+      );
+
+      // 推送通知给好友（fire and forget）
+      query(
+        `SELECT token FROM push_tokens WHERE user_id=$1 LIMIT 5`,
+        [friend.id]
+      ).then(tokRes => {
+        if (tokRes.rows.length) {
+          // TODO: 接入真实 FCM，此处记录日志
+          console.log(`[Push] ${assistantEmoji}${assistantName} → ${friend.display_name}: ${message.slice(0, 40)}`);
+        }
+      }).catch(() => {});
+
+      return {
+        sent: true,
+        to: friend.display_name,
+        friendAssistant: friend.assistant_name || friend.display_name,
+        message,
+        note: `消息已由 ${assistantEmoji}${assistantName} 代发给 ${friend.display_name}`,
+      };
     }
 
     default:
