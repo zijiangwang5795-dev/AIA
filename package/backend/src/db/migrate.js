@@ -250,6 +250,10 @@ INSERT INTO skills (user_id, name, emoji, description, builtin_type, allowed_too
   ('00000000-0000-0000-0000-000000000001', '智能日报', '📊', '根据今日任务生成工作日报', 'daily-brief', ARRAY['memory_search'], true),
   ('00000000-0000-0000-0000-000000000001', '语音分析', '🎙️', '分析语音内容，提取任务和待办', 'analyze-voice', ARRAY['create_tasks','memory_search'], true)
   ON CONFLICT DO NOTHING;
+
+-- ── 增量迁移：给已有表追加新列（IF NOT EXISTS 保证幂等）────
+ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_name  VARCHAR(100) DEFAULT '我的助手';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_emoji VARCHAR(10)  DEFAULT '🤖';
 `;
 
 async function migrate() {
