@@ -496,19 +496,29 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <h1><em>AI</em> 助手</h1>
       <p>你的智能语音助理<br>说话就能完成任务</p>
     </div>
-    <div class="orow">
-      <button class="obtn" onclick="loginWith('wechat')"><span class="oic">💬</span><span>微信</span></button>
-      <button class="obtn" onclick="loginWith('apple')"><span class="oic">🍎</span><span>Apple</span></button>
-      <button class="obtn" onclick="loginWith('google')"><span class="oic">🔵</span><span>Google</span></button>
-    </div>
-    <div class="divider">或手机号登录</div>
     <div class="istack">
-      <input class="inp" type="tel" id="phoneInput" placeholder="+86 手机号" autocomplete="tel">
+      <input class="inp" type="tel" id="phoneInput" placeholder="手机号" autocomplete="tel">
       <div class="otprow">
         <input class="inp" id="otpInput" placeholder="验证码" maxlength="6" inputmode="numeric">
         <button class="btn bg" id="otpBtn" onclick="sendOtp()" style="flex-shrink:0;padding:11px 16px;font-size:13px">发送</button>
       </div>
-      <button class="btn bp bfull" onclick="verifyOtp()">进入助手</button>
+      <button class="btn bp bfull" onclick="verifyOtp()">登录 / 注册</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SETUP MODAL (first login) -->
+<div id="setupModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;align-items:center;justify-content:center;padding:24px">
+  <div style="background:var(--s1);border:1px solid var(--bd);border-radius:20px;padding:28px 24px;width:100%;max-width:360px">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:36px;margin-bottom:10px">👋</div>
+      <div style="font-size:20px;font-weight:900">欢迎！设置你的信息</div>
+      <div style="font-size:13px;color:var(--t2);margin-top:6px">首次登录，请设置你的称呼和助手昵称</div>
+    </div>
+    <div class="istack">
+      <input class="inp" id="setupDisplayName" placeholder="你的称呼（如：小明）" maxlength="20">
+      <input class="inp" id="setupAssistantName" placeholder="助手昵称（如：小AI）" maxlength="20">
+      <button class="btn bp bfull" onclick="completeSetup()">进入助手</button>
     </div>
   </div>
 </div>
@@ -992,24 +1002,13 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <div class="page" id="page-auth">
       <div class="subpage-back" onclick="gp('more')">‹ 更多</div>
       <div class="pad" style="padding-top:12px">
-        <div class="pgtitle" style="margin-bottom:4px">账号绑定</div>
-        <div class="pgsub" style="margin-bottom:20px">一个账号绑定多种登录方式</div>
-        <div class="card"><div class="ctitle">已绑定账号</div><div id="bndList"></div></div>
-        <div class="card" style="margin-bottom:16px">
-          <div class="ctitle">绑定新账号</div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <button class="obtn" onclick="bindA('wechat')" style="justify-content:flex-start;gap:14px;padding:14px 16px"><span class="oic">💬</span><span>绑定微信账号</span></button>
-            <button class="obtn" onclick="bindA('apple')" style="justify-content:flex-start;gap:14px;padding:14px 16px"><span class="oic">🍎</span><span>绑定 Apple 账号</span></button>
-            <button class="obtn" onclick="bindA('google')" style="justify-content:flex-start;gap:14px;padding:14px 16px"><span class="oic">🔵</span><span>绑定 Google 账号</span></button>
-          </div>
-        </div>
-        <div class="card" style="margin-bottom:80px">
-          <div class="ctitle">Token 状态</div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-family:'JetBrains Mono',monospace">Access Token</span><span class="tag tg">有效 2h</span></div>
-            <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-family:'JetBrains Mono',monospace">Refresh Token</span><span class="tag tg">有效 30d</span></div>
-          </div>
-        </div>
+        <div class="pgtitle" style="margin-bottom:4px">账号</div>
+        <div class="pgsub" style="margin-bottom:20px">当前登录账号信息</div>
+        <div class="card" style="margin-bottom:16px"><div class="ctitle">登录状态</div><div id="bndList"></div></div>
+        <button class="btn" onclick="logoutUser()"
+          style="width:100%;margin-bottom:80px;background:rgba(255,80,80,.1);color:#ff5050;border:1px solid rgba(255,80,80,.3)">
+          退出登录
+        </button>
       </div>
     </div>
 
@@ -1099,17 +1098,24 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <div class="pghead">
       <div><div class="pgtitle">好友</div><div class="pgsub">关注与协作网络</div></div>
     </div>
-    <!-- Search bar -->
+    <!-- My ID display -->
+    <div id="myIdCard" style="display:none;margin-bottom:12px;padding:12px 14px;background:var(--s2);border:1px solid var(--bd);border-radius:14px">
+      <div style="font-size:11px;color:var(--t2);margin-bottom:4px;font-weight:600">我的用户ID（分享给好友添加你）</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="myIdText" style="font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--ac);flex:1;word-break:break-all"></div>
+        <button class="btn-sm btn-follow" onclick="copyMyId()" style="flex-shrink:0;font-size:11px;padding:4px 10px">复制</button>
+      </div>
+    </div>
+    <!-- Add by ID -->
     <div class="search-row">
-      <input class="search-inp" id="friendSearch" placeholder="搜索用户昵称..." oninput="filterFriends(this.value)">
-      <button class="btn bp btn-sm" onclick="searchUsers()" style="border-radius:12px;padding:10px 16px">搜索</button>
+      <input class="search-inp" id="friendIdInput" placeholder="输入用户ID添加好友..." onkeydown="if(event.key==='Enter')addFriendById()">
+      <button class="btn bp btn-sm" onclick="addFriendById()" style="border-radius:12px;padding:10px 16px">添加</button>
     </div>
     <!-- Tabs -->
     <div class="social-tabs">
-      <div class="stab active" id="st0" onclick="switchSocialTab(0)">互相关注</div>
-      <div class="stab" id="st1" onclick="switchSocialTab(1)">我的关注</div>
-      <div class="stab" id="st2" onclick="switchSocialTab(2)">动态 Feed</div>
-      <div class="stab" id="st3" onclick="switchSocialTab(3)">发现</div>
+      <div class="stab active" id="st0" onclick="switchSocialTab(0)">好友</div>
+      <div class="stab" id="st1" onclick="switchSocialTab(1)">申请</div>
+      <div class="stab" id="st2" onclick="switchSocialTab(2)">动态</div>
     </div>
     <!-- Tab content -->
     <div id="sc0">
@@ -1125,11 +1131,6 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <div id="sc2" style="display:none">
       <div class="card" style="padding:0;margin-bottom:80px">
         <div id="feedList"></div>
-      </div>
-    </div>
-    <div id="sc3" style="display:none;margin-bottom:80px">
-      <div class="card" style="padding:0">
-        <div id="discoverList"></div>
       </div>
     </div>
   </div>
@@ -1298,34 +1299,88 @@ const SKILLS=[
 ];
 
 // ══════════════════ AUTH
-function loginWith(p){
-  const nm={wechat:'微信用户',apple:'Apple用户',google:'Google用户'};
-  const ic={wechat:'💬',apple:'🍎',google:'🔵'};
-  S.bound.push({p,id:`${p}_uid_demo`,icon:ic[p]});
-  doLogin({name:nm[p],av:ic[p]});
+async function sendOtp() {
+  const ph = document.getElementById('phoneInput').value.trim();
+  if (!ph) { toast('请输入手机号', 'error'); return; }
+  const btn = document.getElementById('otpBtn'); btn.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/auth/otp/send`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ phone: ph })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '发送失败');
+    if (data.demo) toast('验证码已发送（Demo模式：123456）', 'info');
+    else toast('验证码已发送到你的手机', 'success');
+  } catch (e) { toast(`发送失败：${e.message}`, 'error'); btn.disabled = false; return; }
+  let s = 60;
+  const iv = setInterval(() => { btn.textContent=`${s}s`; s--; if(s<0){clearInterval(iv);btn.disabled=false;btn.textContent='发送';} }, 1000);
 }
-function sendOtp(){
-  const ph=document.getElementById('phoneInput').value;
-  if(!ph){toast('请输入手机号','error');return;}
-  const btn=document.getElementById('otpBtn');btn.disabled=true;
-  let s=60;const iv=setInterval(()=>{btn.textContent=`${s}s`;s--;if(s<0){clearInterval(iv);btn.disabled=false;btn.textContent='发送';}},1000);
-  toast('验证码已发送：123456','info');
+
+async function verifyOtp() {
+  const ph = document.getElementById('phoneInput').value.trim();
+  const code = document.getElementById('otpInput').value.trim();
+  if (!ph || !code) { toast('请填写手机号和验证码', 'error'); return; }
+  try {
+    const res = await fetch(`${API_BASE}/auth/otp/verify`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ phone: ph, code })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '验证失败');
+    Auth.save(data.accessToken, data.user);
+    if (data.refreshToken) localStorage.setItem('ai_refresh', data.refreshToken);
+    // 检测新用户（名称为系统默认格式 "用户XXXX"）
+    const isNew = /^用户\d{4}$/.test(data.user?.displayName || '');
+    if (isNew) {
+      showSetupModal();
+    } else {
+      doLogin(data.user);
+    }
+  } catch (e) { toast(`登录失败：${e.message}`, 'error'); }
 }
-function verifyOtp(){
-  const o=document.getElementById('otpInput').value;
-  if(o&&o!=='123456'){toast('Demo 验证码：123456','error');return;}
-  doLogin({name:'手机用户',av:'📱'});
+
+function showSetupModal() {
+  document.getElementById('setupModal').style.display = 'flex';
 }
-function doLogin(u){
-  S.user=u;
-  document.getElementById('authScreen').style.display='none';
-  document.getElementById('app').style.display='flex';
-  document.getElementById('uAv').textContent=u.av;
-  document.getElementById('uName').textContent=u.name;
+
+async function completeSetup() {
+  const displayName = document.getElementById('setupDisplayName').value.trim();
+  const assistantName = document.getElementById('setupAssistantName').value.trim();
+  if (!displayName) { toast('请输入你的称呼', 'error'); return; }
+  if (!assistantName) { toast('请输入助手昵称', 'error'); return; }
+  try {
+    const data = await apiCall('PUT', '/auth/profile', { displayName, assistantName });
+    Auth.user = { ...Auth.user, displayName: data.displayName, assistantName: data.assistantName };
+    localStorage.setItem('ai_user', JSON.stringify(Auth.user));
+    document.getElementById('setupModal').style.display = 'none';
+    doLogin(Auth.user);
+  } catch (e) { toast(`保存失败：${e.message}`, 'error'); }
+}
+
+function doLogin(user) {
+  S.user = user;
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('uAv').textContent = user.avatarEmoji || user.av || '👤';
+  document.getElementById('uName').textContent = user.displayName || user.name || '用户';
   updateGreeting();
   renderAll();
-  toast(`欢迎回来，${u.name}！`,'success');
+  loadTasksFromBackend().catch(() => {});
+  loadSkillsFromBackend().catch(() => {});
+  toast(`欢迎回来，${user.displayName || user.name || '用户'}！`, 'success');
 }
+async function logoutUser() {
+  if (!confirm('确认退出登录？')) return;
+  try { await apiCall('POST', '/auth/logout', {}); } catch {}
+  Auth.clear();
+  localStorage.removeItem('ai_refresh');
+  S.user = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('authScreen').style.display = 'flex';
+  toast('已退出登录', 'info');
+}
+
 function updateGreeting(){
   const h=new Date().getHours();
   const g=h<6?'深夜好 🌙':h<12?'早上好 👋':h<18?'下午好 ☀️':'晚上好 🌆';
@@ -1740,25 +1795,41 @@ async function initApp() {
     toast('无法连接后端，部分功能不可用', 'info');
   }
 
-  // Demo 模式：自动登录
-  if (!Auth.token) {
+  // 有已存储的 token，尝试验证
+  if (Auth.token) {
     try {
-      const res = await apiCall('POST', '/auth/demo-login', {});
-      Auth.save(res.accessToken, res.user);
-      // 更新用户名显示
-      document.getElementById('uName').textContent =
-        `你好，<span class="ac">${res.user?.displayName || '用户'}</span>`;
+      const me = await apiCall('GET', '/auth/me');
+      Auth.save(Auth.token, me);
+      doLogin(me);
+      return;
     } catch {
-      // 后端不可用，继续使用本地模式
+      // token 过期，尝试 refresh
+      const refreshToken = localStorage.getItem('ai_refresh');
+      if (refreshToken) {
+        try {
+          const res = await fetch(`${API_BASE}/auth/refresh`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ refreshToken })
+          });
+          const data = await res.json();
+          if (data.accessToken) {
+            Auth.token = data.accessToken;
+            localStorage.setItem('ai_token', data.accessToken);
+            const me = await apiCall('GET', '/auth/me');
+            Auth.save(data.accessToken, me);
+            doLogin(me);
+            return;
+          }
+        } catch {}
+      }
+      // refresh 失败，清除 token
+      Auth.clear();
+      localStorage.removeItem('ai_refresh');
     }
   }
 
-  // 加载任务
-  await loadTasksFromBackend().catch(() => {});
-  // 加载技能
-  await loadSkillsFromBackend().catch(() => {});
-
-  rdash();
+  // 未登录，显示登录界面
+  document.getElementById('authScreen').style.display = 'flex';
 }
 
 // ══════════════════ TASKS — 从后端加载
@@ -2707,8 +2778,8 @@ function clearDebugLocalStorage() {
 function rauth() {
   const u = Auth.user;
   document.getElementById('bndList').innerHTML = u
-    ? `<div class="acitm"><span style="font-size:26px;width:36px;text-align:center">👤</span><div style="flex:1"><div style="font-size:15px;font-weight:600">${u.displayName}</div><div style="font-size:12px;color:var(--t2);margin-top:2px;font-family:'JetBrains Mono',monospace">ID: ${(u.id||'').slice(0,8)}...</div></div><span class="tag tg">已登录</span></div>`
-    : '<div class="empty-state" style="padding:20px 0"><p>请登录</p></div>';
+    ? `<div class="acitm"><span style="font-size:26px;width:36px;text-align:center">${u.avatarEmoji||'👤'}</span><div style="flex:1"><div style="font-size:15px;font-weight:600">${u.displayName||'用户'}</div><div style="font-size:11px;color:var(--t2);margin-top:4px">手机：${u.phone||'-'}</div><div style="font-size:11px;color:var(--t3);margin-top:2px;font-family:'JetBrains Mono',monospace;word-break:break-all">ID: ${u.id||''}</div></div><span class="tag tg">已登录</span></div>`
+    : '<div class="empty-state" style="padding:20px 0"><p>未登录</p></div>';
 }
 
 async function bindA(provider) {
@@ -2801,6 +2872,11 @@ async function rfriends() {
     document.getElementById('mutualList').innerHTML = `<div class="empty-state"><div class="ei">🔐</div><p>请先登录</p></div>`;
     return;
   }
+  // 显示当前用户ID
+  if (Auth.userId) {
+    document.getElementById('myIdCard').style.display = '';
+    document.getElementById('myIdText').textContent = Auth.userId;
+  }
   try {
     const [accepted, pending] = await Promise.all([
       apiCall('GET', '/api/friends?status=accepted'),
@@ -2814,6 +2890,18 @@ async function rfriends() {
   } catch(e) {
     document.getElementById('mutualList').innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${e.message}</p></div>`;
   }
+}
+
+function copyMyId() {
+  const id = Auth.userId;
+  if (!id) return;
+  navigator.clipboard.writeText(id).then(() => toast('ID已复制', 'success')).catch(() => {
+    // fallback
+    const el = document.createElement('textarea');
+    el.value = id; document.body.appendChild(el); el.select();
+    document.execCommand('copy'); document.body.removeChild(el);
+    toast('ID已复制', 'success');
+  });
 }
 
 function renderMutual() {
@@ -2858,18 +2946,6 @@ function renderFeed() {
   document.getElementById('feedList').innerHTML = `<div class="empty-state"><div class="ei">📰</div><p>动态功能即将上线</p></div>`;
 }
 
-function renderDiscover() {
-  const el = document.getElementById('discoverList');
-  if (!_discoverList.length) { el.innerHTML = `<div class="empty-state"><div class="ei">🔍</div><p>搜索用户昵称或手机号</p></div>`; return; }
-  el.innerHTML = _discoverList.map((u,i) => friendCard({
-    id: u.id,
-    name: u.assistantName || u.displayName,
-    av: u.assistantEmoji || u.avatarEmoji || '🤖',
-    meta: u.displayName || '',
-    status: u.relation?.status || 'none',
-    fsid: null,
-  }, i)).join('');
-}
 
 const FAV_CLASSES = ['fav-purple','fav-cyan','fav-pink'];
 function friendCard(f, idx=0) {
@@ -2926,8 +3002,9 @@ function updateFriendBadge() {
 }
 
 function switchSocialTab(idx) {
-  for(let i=0;i<4;i++){
-    document.getElementById(`st${i}`).classList.toggle('active', i===idx);
+  for(let i=0;i<3;i++){
+    const tab = document.getElementById(`st${i}`);
+    if (tab) tab.classList.toggle('active', i===idx);
     const sc = document.getElementById(`sc${i}`);
     if(sc) sc.style.display = i===idx ? '' : 'none';
   }
@@ -2935,22 +3012,24 @@ function switchSocialTab(idx) {
   if (idx === 2) renderFeed();
 }
 
-async function searchUsers() {
-  const q = document.getElementById('friendSearch').value.trim();
-  if(!q){toast('请输入搜索内容','error');return;}
-  switchSocialTab(3);
-  document.getElementById('discoverList').innerHTML = `<div class="empty-state"><div class="ei">⏳</div><p>搜索中…</p></div>`;
+async function addFriendById() {
+  const targetId = document.getElementById('friendIdInput').value.trim();
+  if (!targetId) { toast('请输入用户ID', 'error'); return; }
+  if (targetId === Auth.userId) { toast('不能添加自己', 'error'); return; }
+  // UUID 格式校验
+  if (!/^[0-9a-f-]{36}$/i.test(targetId)) { toast('请输入正确的用户ID格式', 'error'); return; }
   try {
-    const data = await apiCall('GET', `/api/users/search?q=${encodeURIComponent(q)}`);
-    _discoverList = data.users || [];
-    renderDiscover();
+    // 先查询用户是否存在
+    const user = await apiCall('GET', `/api/users/lookup/${encodeURIComponent(targetId)}`);
+    if (!user || !user.id) { toast('用户不存在', 'error'); return; }
+    // 发送好友申请
+    await apiCall('POST', '/api/friends/request', { recipientId: targetId });
+    document.getElementById('friendIdInput').value = '';
+    toast(`已向 ${user.displayName} 发送好友申请`, 'success');
+    rfriends();
   } catch(e) {
-    document.getElementById('discoverList').innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${e.message}</p></div>`;
+    toast(`操作失败：${e.message}`, 'error');
   }
-}
-
-function filterFriends(q) {
-  if(!q && currentSocialTab === 0) renderMutual();
 }
 
 // ── CHAT
