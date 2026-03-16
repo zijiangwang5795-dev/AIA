@@ -3,6 +3,13 @@ plugins {
     id 'com.google.gms.google-services'   // Firebase
 }
 
+// 读取 local.properties（不进 git，每台机器单独配）
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
 android {
     namespace 'com.aia.assistant'
     compileSdk 34
@@ -14,8 +21,9 @@ android {
         versionCode 1
         versionName "1.0.0"
 
-        // 后端地址（可在 local.properties 中覆盖）
-        buildConfigField "String", "API_BASE_URL", "\"http://localhost:3000\""
+        // 后端地址：local.properties 中的 api.base.url 优先，否则用默认值
+        def apiBase = localProps.getProperty('api.base.url', 'http://localhost:3000')
+        buildConfigField "String", "API_BASE_URL", "\"${apiBase}\""
     }
 
     buildFeatures {
