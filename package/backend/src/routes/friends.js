@@ -3,6 +3,30 @@ const { query } = require('../db/client');
 
 module.exports = async function friendsRoutes(app) {
 
+  // ── 通过ID查询用户（用于添加好友）────────────────────
+  app.get('/users/lookup/:id', {
+    preHandler: [async (req, reply) => {
+      try { await req.jwtVerify(); } catch { reply.code(401).send({ error: 'Unauthorized' }); }
+    }]
+  }, async (req, reply) => {
+    const { id } = req.params;
+    // UUID 格式校验
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return reply.code(400).send({ error: 'Invalid user ID format' });
+    }
+    const res = await query(`SELECT id, display_name, avatar_emoji, talent, assistant_name, assistant_emoji FROM users WHERE id=$1`, [id]);
+    const u = res.rows[0];
+    if (!u) return reply.code(404).send({ error: 'User not found' });
+    return {
+      id: u.id,
+      displayName: u.display_name,
+      avatarEmoji: u.avatar_emoji || '👤',
+      talent: u.talent,
+      assistantName: u.assistant_name,
+      assistantEmoji: u.assistant_emoji || '🤖',
+    };
+  });
+
   // ── 搜索用户 ──────────────────────────────────────────
   app.get('/users/search', {
     preHandler: [async (req, reply) => {
