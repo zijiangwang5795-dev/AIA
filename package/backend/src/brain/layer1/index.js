@@ -3,6 +3,8 @@ const { query } = require('../../db/client');
 
 // ── 意图分类规则 ─────────────────────────────────────
 const INTENT_RULES = [
+  // 社交：助手代发消息（最高优先级，关键词明确）
+  { pattern: /帮我(告诉|通知|发消息给|发个消息给|转告|跟).+说|发消息给.+说|告诉.+说/, intent: 'send-friend-message', confidence: 0.95 },
   // 客户端本地技能（优先识别，因为关键词更具体）
   { pattern: /闹钟|定时提醒|提醒我.*(点|时)|(.*(点|时).*提醒|叫我)/, intent: 'client-alarm', confidence: 0.95 },
   { pattern: /日历|日程|会议|约.*(时间|见面)|添加.*日程|创建.*日程/, intent: 'client-calendar', confidence: 0.92 },
@@ -68,6 +70,7 @@ const SKILL_TOOL_MAP = {
   'client-calendar':['create_tasks'],   // 同时创建任务记录
   'client-call':    [],
   'client-sms':     [],
+  'send-friend-message': ['send_friend_message'],
   'default':        ['create_tasks', 'memory_search'],
 };
 

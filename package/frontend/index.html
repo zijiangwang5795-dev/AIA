@@ -170,6 +170,14 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .chat-meta{font-size:10px;color:var(--t3);margin-top:3px}
 .chat-msg.mine .chat-meta{text-align:right}
 .chat-input-bar{position:fixed;bottom:0;left:0;right:0;padding:10px 16px;padding-bottom:calc(10px + var(--sb));background:rgba(6,6,15,.96);backdrop-filter:blur(24px);border-top:1px solid var(--bd);display:flex;gap:8px;align-items:flex-end;z-index:50}
+/* 首页助手输入框 */
+.home-ask-bar{padding:0 16px 16px;margin-bottom:4px}
+.home-ask-wrap{background:var(--s1);border:1px solid var(--bd);border-radius:24px;display:flex;align-items:flex-end;gap:8px;padding:8px 8px 8px 16px;transition:border-color .15s}
+.home-ask-wrap:focus-within{border-color:var(--ac)}
+.home-ask-input{flex:1;background:transparent;border:none;color:var(--tx);font-size:14px;font-family:'Noto Sans SC',sans-serif;outline:none;resize:none;max-height:80px;line-height:1.5;padding:2px 0}
+.home-ask-input::placeholder{color:var(--t3)}
+.home-ask-send{width:36px;height:36px;border-radius:50%;background:var(--ac);border:none;display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;flex-shrink:0;transition:all .15s}
+.home-ask-send:active{transform:scale(.92)}
 .chat-input{flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:22px;padding:10px 16px;color:var(--tx);font-size:14px;font-family:'Noto Sans SC',sans-serif;outline:none;resize:none;max-height:100px;line-height:1.5;transition:border-color .15s}
 .chat-input:focus{border-color:var(--ac)}
 .chat-send{width:40px;height:40px;border-radius:50%;background:var(--ac);border:none;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 12px rgba(124,111,255,.35);transition:all .15s}
@@ -600,9 +608,9 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
           <div class="sc-ic">✅</div>
           <div class="sc-nm hot">任务清单</div>
         </div>
-        <div class="sc" onclick="gp('skills')">
-          <div class="sc-ic">⚡</div>
-          <div class="sc-nm hot">技能中心</div>
+        <div class="sc" onclick="gp('friends')">
+          <div class="sc-ic">💬</div>
+          <div class="sc-nm hot">发消息</div>
         </div>
       </div>
 
@@ -629,6 +637,16 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
             <div class="sb-tags"><span class="tag ty">memory_search</span><span class="tag tp">一键生成</span></div>
           </div>
           <div class="sb-arr">›</div>
+        </div>
+      </div>
+
+      <!-- Ask assistant input -->
+      <div class="home-ask-bar">
+        <div class="home-ask-wrap">
+          <textarea class="home-ask-input" id="homeAskInput" rows="1" placeholder="问助手任何问题，或说「帮我发消息给…」"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendHomeAsk()}"
+            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
+          <button class="home-ask-send" onclick="sendHomeAsk()">➤</button>
         </div>
       </div>
 
@@ -1386,6 +1404,8 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
 // ══════════════════ STATE
 const S={
   user:null,
+  assistantEmoji:'🤖',
+  assistantName:'我的助手',
   tasks:[
     {id:1,title:'准备Q3业务复盘报告',priority:'high',category:'工作',deadline:'2024-03-15',status:'pending',source:'agent'},
     {id:2,title:'给张总发邮件跟进项目进展',priority:'med',category:'沟通',deadline:'2024-03-12',status:'pending',source:'voice'},
@@ -1476,9 +1496,11 @@ async function verifyOtp(){
 
 function doLogin(user){
   S.user = user;
+  S.assistantEmoji = user.assistantEmoji || user.assistant_emoji || '🤖';
+  S.assistantName  = user.assistantName  || user.assistant_name  || '我的助手';
   document.getElementById('authScreen').style.display='none';
   document.getElementById('app').style.display='flex';
-  document.getElementById('uAv').textContent = user.avatarEmoji || user.av || '👤';
+  document.getElementById('uAv').textContent = S.assistantEmoji;  // 头像显示助手 emoji
   document.getElementById('uName').textContent = user.displayName || user.name || '用户';
   document.getElementById('logoutSub').textContent = user.phone || '切换账号';
   updateGreeting();
@@ -1797,6 +1819,19 @@ function quickRec() {
     const txt = document.getElementById('vtext').value.trim();
     if (txt) { gp('voice'); toast('录音完成，可点击分析', 'info'); }
   }
+}
+
+// ══════════════════ HOME ASK
+function sendHomeAsk() {
+  const inp = document.getElementById('homeAskInput');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  inp.style.height = 'auto';
+  // 把文字填入语音页输入框，跳转后直接开始分析
+  document.getElementById('vtext').value = text;
+  gp('voice');
+  sl(100).then(() => analyze());
 }
 
 // ══════════════════ VOICE PAGE RECORDING
@@ -2660,13 +2695,13 @@ function renderFriendsList() {
   }
   el.innerHTML = FRIENDS_LIST.map(f => `
     <div class="friend-card" onclick="openFriendProfile('${f.friendId}','${f.friendName}','${f.friendAvatar}')">
-      <div class="fav fav-purple">${f.friendAvatar || '👤'}</div>
+      <div class="fav fav-purple">${f.assistantEmoji || f.friendAvatar || '🤖'}</div>
       <div class="friend-info">
-        <div class="friend-name">${f.friendName}</div>
-        <div class="friend-meta">${talentLabel(f.friendTalent)}${f.unreadCount?` · <span style="color:var(--pk);font-weight:700">${f.unreadCount} 条新消息</span>`:''}</div>
+        <div class="friend-name">${f.assistantName || f.friendName}</div>
+        <div class="friend-meta" style="color:var(--t3);font-size:11px">${f.friendName} 的助手${f.unreadCount?` · <span style="color:var(--pk);font-weight:700">${f.unreadCount} 条新消息</span>`:''}</div>
       </div>
       <div class="friend-action">
-        <button class="btn-sm btn-mutual" onclick="event.stopPropagation();openChatWith('${f.friendId}','${f.friendName}','${f.friendAvatar}')">💬</button>
+        <button class="btn-sm btn-mutual" onclick="event.stopPropagation();openChatWith('${f.friendId}','${f.assistantName||f.friendName}','${f.assistantEmoji||f.friendAvatar}')">💬</button>
       </div>
     </div>`).join('');
 }
@@ -2681,10 +2716,10 @@ function renderPendingList() {
     html += `<div style="padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--t3)">收到的申请</div>`;
     html += incoming.map(f => `
       <div class="friend-card">
-        <div class="fav fav-pink">${f.friendAvatar || '👤'}</div>
+        <div class="fav fav-pink">${f.assistantEmoji || f.friendAvatar || '🤖'}</div>
         <div class="friend-info">
-          <div class="friend-name">${f.friendName}</div>
-          <div class="friend-meta">申请加你为好友</div>
+          <div class="friend-name">${f.assistantName || f.friendName}</div>
+          <div class="friend-meta">${f.friendName} 的助手申请加你为好友</div>
         </div>
         <div class="friend-action" style="display:flex;gap:6px">
           <button class="btn-sm btn-follow" onclick="respondFriendReq('${f.friendshipId}','accept')">接受</button>
@@ -2696,10 +2731,10 @@ function renderPendingList() {
     html += `<div style="padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--t3)">已发出的申请</div>`;
     html += outgoing.map(f => `
       <div class="friend-card">
-        <div class="fav fav-cyan">${f.friendAvatar || '👤'}</div>
+        <div class="fav fav-cyan">${f.assistantEmoji || f.friendAvatar || '🤖'}</div>
         <div class="friend-info">
-          <div class="friend-name">${f.friendName}</div>
-          <div class="friend-meta">等待对方确认</div>
+          <div class="friend-name">${f.assistantName || f.friendName}</div>
+          <div class="friend-meta">${f.friendName} 的助手 · 等待确认</div>
         </div>
         <div class="friend-action">
           <button class="btn-sm btn-following" onclick="cancelFriendReq('${f.friendshipId}')">取消</button>
@@ -2860,11 +2895,19 @@ async function loadChatMessages(friendId) {
     el.innerHTML = msgs.map(m => {
       const isMine = m.from_user_id === Auth.userId;
       const time = new Date(m.created_at).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'});
+      // 以助手为主体：显示助手 emoji，助手代发时标注
+      const av = isMine
+        ? (S.assistantEmoji || '🤖')
+        : (m.from_assistant_emoji || m.from_avatar || '🤖');
+      const senderLabel = m.sender_type === 'assistant'
+        ? `<div style="font-size:10px;color:var(--t3);margin-bottom:2px">${escapeHtml(m.sender_name||'助手')}</div>`
+        : '';
       return `<div class="chat-msg ${isMine?'mine':'other'}">
-        ${!isMine ? `<div class="chat-av-sm">${m.from_avatar||'👤'}</div>` : ''}
+        ${!isMine ? `<div class="chat-av-sm">${av}</div>` : ''}
         <div>
+          ${!isMine ? senderLabel : ''}
           <div class="chat-bubble">${escapeHtml(m.content)}</div>
-          <div class="chat-meta">${time}</div>
+          <div class="chat-meta">${time}${m.sender_type==='assistant'&&isMine?' · 助手代发':''}</div>
         </div>
       </div>`;
     }).join('');

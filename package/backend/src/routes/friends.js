@@ -271,11 +271,29 @@ module.exports = async function friendsRoutes(app) {
       // Allow sending if it's pending - first message allowed
     }
 
-    const res = await query(
-      `INSERT INTO messages (from_user_id, to_user_id, content)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [req.user.sub, toUserId, content.slice(0, 2000)]
+    // 获取发送者助手信息，消息标注为来自助手
+    const senderRes = await query(
+      `SELECT display_name, assistant_name, assistant_emoji FROM users WHERE id=$1`,
+      [req.user.sub]
     );
+    const sender = senderRes.rows[0];
+    const senderName = `${sender?.assistant_emoji || '🤖'} ${sender?.assistant_name || '我的助手'}`;
+
+    const res = await query(
+      `INSERT INTO messages (from_user_id, to_user_id, content, sender_type, sender_name)
+       VALUES ($1, $2, $3, 'user', $4) RETURNING *`,
+      [req.user.sub, toUserId, content.slice(0, 2000), senderName]
+    );
+
+    // 推送通知给对方（fire and forget）
+    query(`SELECT token FROM push_tokens WHERE user_id=$1 LIMIT 5`, [toUserId])
+      .then(tokRes => {
+        if (tokRes.rows.length) {
+          // TODO: 接入真实 FCM Admin SDK
+          app.log.info(`[Push] Message from ${sender?.display_name} → user ${toUserId}`);
+        }
+      }).catch(() => {});
+
     return res.rows[0];
   });
 
@@ -294,6 +312,7 @@ module.exports = async function friendsRoutes(app) {
 
     const res = await query(
       `SELECT m.*, u.display_name as from_name, u.avatar_emoji as from_avatar,
+              u.assistant_name as from_assistant_name,
               COALESCE(u.assistant_emoji, u.avatar_emoji, '🤖') as from_assistant_emoji
        FROM messages m
        JOIN users u ON u.id = m.from_user_id
