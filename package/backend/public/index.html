@@ -778,12 +778,29 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       </div>
 
       <div class="more-section-label">账号</div>
-      <div class="card" style="padding:0;margin-bottom:80px">
+      <div class="card" style="padding:0;margin-bottom:16px">
         <div class="more-row" onclick="gsp('auth')">
           <div class="mr-icon mr-green">🔑</div>
           <div class="mr-body"><div class="mr-name">账号绑定</div><div class="mr-sub">微信 / Apple / Google / 手机号</div></div>
           <div class="mr-right">›</div>
         </div>
+      </div>
+
+      <!-- 调试模式入口（debug mode 激活后显示）-->
+      <div class="more-section-label" id="debugSectionLabel" style="display:none">开发者</div>
+      <div class="card" id="debugMenuCard" style="padding:0;margin-bottom:16px;display:none">
+        <div class="more-row" onclick="gsp('debug')">
+          <div class="mr-icon" style="background:rgba(255,80,80,.15);font-size:18px">🔧</div>
+          <div class="mr-body"><div class="mr-name">调试设置</div><div class="mr-sub">API 配置 · 后端通信 · 运行时覆盖</div></div>
+          <div class="mr-right">›</div>
+        </div>
+      </div>
+
+      <!-- 版本信息（连续点击 5 次解锁调试模式）-->
+      <div id="versionBar" onclick="versionTap()"
+           style="text-align:center;padding:12px 0 80px;font-size:11px;color:var(--t3);user-select:none;cursor:default">
+        AI 助手 · v1.0.0 · build 2026
+        <span id="versionTapHint" style="display:none;color:var(--ac);margin-left:4px"></span>
       </div>
     </div>
 
@@ -995,6 +1012,87 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
         </div>
       </div>
     </div>
+
+  <!-- ═══ SUB: DEBUG ═══ -->
+  <div class="page pad" id="page-debug">
+    <div class="subpage-back" onclick="gp('more')">‹ 更多</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+      <div class="pgtitle" style="margin-bottom:0">调试设置</div>
+      <span style="font-size:11px;background:rgba(255,80,80,.15);color:#ff5050;padding:2px 8px;border-radius:20px;font-weight:700">DEV</span>
+    </div>
+    <div class="pgsub" style="margin-bottom:20px">运行时覆盖 · 重启后恢复默认值</div>
+
+    <!-- AI API 配置 -->
+    <div class="card">
+      <div class="ctitle">AI API 配置</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:14px">覆盖后端使用的 AI API（优先于 .env 环境变量）</div>
+      <div class="istack">
+        <div>
+          <div class="ilabel">Base URL</div>
+          <input class="inp" id="dbgAiBaseUrl" placeholder="https://api.deepseek.com（留空使用默认）">
+        </div>
+        <div>
+          <div class="ilabel">API Key</div>
+          <div style="position:relative">
+            <input class="inp" id="dbgAiApiKey" type="password" placeholder="sk-…（留空不修改，输入 __clear__ 清空）"
+                   style="padding-right:44px">
+            <button onclick="toggleDbgKeyVis()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                background:none;border:none;color:var(--t2);cursor:pointer;font-size:14px" id="dbgKeyEye">👁</button>
+          </div>
+        </div>
+        <div>
+          <div class="ilabel">默认模型（留空则按路由规则自动选择）</div>
+          <input class="inp" id="dbgAiModel" placeholder="deepseek-chat / gpt-4o-mini / …">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn bp" style="flex:1" onclick="saveDebugAiConfig()">保存 AI 配置</button>
+        <button class="btn bg" onclick="clearDebugAiConfig()">重置</button>
+      </div>
+      <div id="dbgAiStatus" style="font-size:12px;color:var(--t2);margin-top:8px;min-height:16px"></div>
+    </div>
+
+    <!-- 后端通信配置 -->
+    <div class="card">
+      <div class="ctitle">后端通信</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:14px">前端与后端服务的连接地址（保存后立即生效，刷新页面前有效）</div>
+      <div class="istack">
+        <div>
+          <div class="ilabel">后端地址（协议 + 主机）</div>
+          <input class="inp" id="dbgBackendHost" placeholder="http://localhost">
+        </div>
+        <div>
+          <div class="ilabel">端口</div>
+          <input class="inp" id="dbgBackendPort" type="number" placeholder="3000" min="1" max="65535">
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--t2);margin:8px 0 12px">
+        当前生效地址：<span id="dbgCurrentBase" style="font-family:'JetBrains Mono',monospace;color:var(--ac)"></span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn bp" style="flex:1" onclick="saveDebugBackend()">保存并生效</button>
+        <button class="btn bg" onclick="testDebugBackend()">测试连接</button>
+        <button class="btn bg" onclick="clearDebugBackend()">重置</button>
+      </div>
+      <div id="dbgBackendStatus" style="font-size:12px;color:var(--t2);margin-top:8px;min-height:16px"></div>
+    </div>
+
+    <!-- 本地缓存 -->
+    <div class="card">
+      <div class="ctitle">本地存储</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn bg" style="font-size:12px" onclick="showLocalStorage()">查看 localStorage</button>
+        <button class="btn bg" style="font-size:12px;color:#ff5050" onclick="clearDebugLocalStorage()">清除调试项</button>
+      </div>
+      <pre id="dbgLocalStorageDump" style="font-size:10px;color:var(--t2);margin-top:10px;white-space:pre-wrap;word-break:break-all;display:none"></pre>
+    </div>
+
+    <!-- 退出调试模式 -->
+    <button class="btn" onclick="exitDebugMode()"
+            style="width:100%;margin-bottom:80px;background:rgba(255,80,80,.1);color:#ff5050;border:1px solid rgba(255,80,80,.3)">
+      退出调试模式
+    </button>
+  </div>
 
   <!-- ═══ FRIENDS ═══ -->
   <div class="page pad" id="page-friends">
@@ -1260,6 +1358,7 @@ function rp(pg){
   if(pg==='market')rmarket();
   if(pg==='soul')loadSoulPage();
   if(pg==='profile')loadProfilePage();
+  if(pg==='debug')loadDebugPage();
 }
 function renderAll(){rdash();rtasks();rskills();rmem();raudit();rauth();rmodels();rrules([]);rfriends();rmarket();}
 
@@ -1270,7 +1369,14 @@ function renderAll(){rdash();rtasks();rskills();rmem();raudit();rauth();rmodels(
 // 本地开发：'http://localhost:3000'
 // 局域网（手机访问电脑）：'http://192.168.x.x:3000'
 // 生产环境：'https://your-domain.com'
-const API_BASE = window.API_BASE || 'http://localhost:3000';
+// API_BASE 支持运行时覆盖（调试模式可通过 localStorage ai_debug_host/port 修改）
+const _DEFAULT_API_BASE = window.API_BASE || 'http://localhost:3000';
+const API_BASE = (() => {
+  const h = localStorage.getItem('ai_debug_host');
+  const p = localStorage.getItem('ai_debug_port');
+  if (h) return p ? `${h}:${p}` : h;
+  return _DEFAULT_API_BASE;
+})();
 
 // ── Token 管理 ─────────────────────────────────────────
 const Auth = {
@@ -2400,6 +2506,203 @@ async function saveProfile() {
   } catch(e) { toast(e.message, 'error'); }
 }
 
+// ══════════════════ DEBUG MODE ──────────────────────────────────────────────
+const APP_VERSION = 'v1.0.0';
+const APP_BUILD   = '2026';
+
+let _versionTapCount = 0;
+let _versionTapTimer = null;
+let _debugMode = localStorage.getItem('ai_debug_mode') === '1';
+
+// 初始化调试模式 UI 状态
+function initDebugMode() {
+  if (_debugMode) _showDebugEntry();
+}
+
+function _showDebugEntry() {
+  document.getElementById('debugSectionLabel').style.display = '';
+  document.getElementById('debugMenuCard').style.display = '';
+}
+
+function _hideDebugEntry() {
+  document.getElementById('debugSectionLabel').style.display = 'none';
+  document.getElementById('debugMenuCard').style.display = 'none';
+}
+
+// 版本栏连续点击 5 次解锁
+function versionTap() {
+  _versionTapCount++;
+  clearTimeout(_versionTapTimer);
+  const hint = document.getElementById('versionTapHint');
+
+  if (_versionTapCount >= 5) {
+    _versionTapCount = 0;
+    hint.style.display = 'none';
+    if (_debugMode) {
+      toast('调试模式已开启', 'info');
+    } else {
+      _debugMode = true;
+      localStorage.setItem('ai_debug_mode', '1');
+      _showDebugEntry();
+      toast('🔧 调试模式已解锁！', 'success');
+    }
+    return;
+  }
+
+  const remaining = 5 - _versionTapCount;
+  hint.style.display = '';
+  hint.textContent = `再点 ${remaining} 次`;
+
+  _versionTapTimer = setTimeout(() => {
+    _versionTapCount = 0;
+    hint.style.display = 'none';
+  }, 2500);
+}
+
+function exitDebugMode() {
+  _debugMode = false;
+  localStorage.removeItem('ai_debug_mode');
+  _hideDebugEntry();
+  gp('more');
+  toast('调试模式已关闭', 'info');
+}
+
+// ── Debug page 加载 ─────────────────────────────────────
+async function loadDebugPage() {
+  // 后端地址
+  const host = localStorage.getItem('ai_debug_host') || '';
+  const port = localStorage.getItem('ai_debug_port') || '';
+  document.getElementById('dbgBackendHost').value = host;
+  document.getElementById('dbgBackendPort').value = port;
+  document.getElementById('dbgCurrentBase').textContent = _resolveApiBase();
+
+  // AI 配置（从后端读取掩码版本）
+  document.getElementById('dbgAiStatus').textContent = '';
+  try {
+    const cfg = await apiCall('GET', '/admin/config');
+    document.getElementById('dbgAiBaseUrl').value = cfg.aiBaseUrl || '';
+    document.getElementById('dbgAiModel').value   = cfg.aiModel   || '';
+    // API Key 不回显，仅显示状态
+    document.getElementById('dbgAiStatus').textContent =
+      cfg.aiApiKey ? `当前 Key：${cfg.aiApiKey}` : '当前 Key：使用 .env 默认值';
+  } catch(e) {
+    document.getElementById('dbgAiStatus').textContent = '无法读取后端配置：' + e.message;
+  }
+}
+
+function _resolveApiBase() {
+  const h = localStorage.getItem('ai_debug_host') || '';
+  const p = localStorage.getItem('ai_debug_port') || '';
+  if (h) return p ? `${h}:${p}` : h;
+  return API_BASE;
+}
+
+// ── AI API 配置保存 ─────────────────────────────────────
+async function saveDebugAiConfig() {
+  const aiBaseUrl = document.getElementById('dbgAiBaseUrl').value.trim();
+  const aiApiKey  = document.getElementById('dbgAiApiKey').value.trim();
+  const aiModel   = document.getElementById('dbgAiModel').value.trim();
+  const st = document.getElementById('dbgAiStatus');
+  st.textContent = '保存中…';
+  try {
+    const body = { aiBaseUrl: aiBaseUrl || null, aiModel: aiModel || null };
+    if (aiApiKey) body.aiApiKey = aiApiKey;  // 空字符串 = 不修改
+    const res = await apiCall('PUT', '/admin/config', body);
+    document.getElementById('dbgAiApiKey').value = '';  // 清空 key 输入框
+    st.style.color = 'var(--ac)';
+    st.textContent = `已保存。当前 Key：${res.aiApiKey || '（.env 默认）'}`;
+    setTimeout(() => { st.style.color = 'var(--t2)'; }, 2000);
+    toast('AI 配置已保存', 'success');
+  } catch(e) { st.textContent = '保存失败：' + e.message; toast(e.message, 'error'); }
+}
+
+async function clearDebugAiConfig() {
+  const st = document.getElementById('dbgAiStatus');
+  try {
+    await apiCall('DELETE', '/admin/config');
+    document.getElementById('dbgAiBaseUrl').value = '';
+    document.getElementById('dbgAiApiKey').value  = '';
+    document.getElementById('dbgAiModel').value   = '';
+    st.textContent = '已重置为 .env 默认值';
+    toast('AI 配置已重置', 'info');
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function toggleDbgKeyVis() {
+  const inp = document.getElementById('dbgAiApiKey');
+  const eye = document.getElementById('dbgKeyEye');
+  if (inp.type === 'password') { inp.type = 'text'; eye.textContent = '🙈'; }
+  else { inp.type = 'password'; eye.textContent = '👁'; }
+}
+
+// ── 后端通信配置 ─────────────────────────────────────────
+function saveDebugBackend() {
+  const host = document.getElementById('dbgBackendHost').value.trim();
+  const port = document.getElementById('dbgBackendPort').value.trim();
+  const st   = document.getElementById('dbgBackendStatus');
+
+  if (host) localStorage.setItem('ai_debug_host', host);
+  else      localStorage.removeItem('ai_debug_host');
+  if (port) localStorage.setItem('ai_debug_port', port);
+  else      localStorage.removeItem('ai_debug_port');
+
+  const newBase = _resolveApiBase();
+  // 直接更新运行时 API_BASE
+  window._debugApiBase = newBase;
+  document.getElementById('dbgCurrentBase').textContent = newBase;
+  st.style.color = 'var(--ac)';
+  st.textContent = `生效：${newBase}（刷新页面后永久应用）`;
+  setTimeout(() => { st.style.color = 'var(--t2)'; }, 3000);
+  toast('后端地址已更新', 'success');
+}
+
+async function testDebugBackend() {
+  const st = document.getElementById('dbgBackendStatus');
+  const base = _resolveApiBase();
+  st.textContent = `测试 ${base}/health…`;
+  try {
+    const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(5000) });
+    const j = await r.json();
+    st.style.color = '#4caf50';
+    st.textContent = `✓ 连接成功  v${j.version || '?'}  ${j.time || ''}`;
+    setTimeout(() => { st.style.color = 'var(--t2)'; }, 4000);
+  } catch(e) {
+    st.style.color = '#ff5050';
+    st.textContent = `✗ 连接失败：${e.message}`;
+  }
+}
+
+function clearDebugBackend() {
+  localStorage.removeItem('ai_debug_host');
+  localStorage.removeItem('ai_debug_port');
+  document.getElementById('dbgBackendHost').value = '';
+  document.getElementById('dbgBackendPort').value = '';
+  window._debugApiBase = null;
+  document.getElementById('dbgCurrentBase').textContent = API_BASE;
+  document.getElementById('dbgBackendStatus').textContent = '已重置为默认';
+  toast('后端地址已重置', 'info');
+}
+
+// ── localStorage 查看 ───────────────────────────────────
+function showLocalStorage() {
+  const el = document.getElementById('dbgLocalStorageDump');
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  const items = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    // 掩码 token
+    items[k] = k === 'ai_token' ? '***' : localStorage.getItem(k);
+  }
+  el.textContent = JSON.stringify(items, null, 2);
+  el.style.display = 'block';
+}
+
+function clearDebugLocalStorage() {
+  ['ai_debug_host','ai_debug_port','ai_debug_mode'].forEach(k => localStorage.removeItem(k));
+  document.getElementById('dbgLocalStorageDump').style.display = 'none';
+  toast('调试相关 localStorage 已清除', 'info');
+}
+
 // ══════════════════ AUTH UI（OTP 登录）
 function rauth() {
   const u = Auth.user;
@@ -2462,6 +2765,9 @@ window.addEventListener('DOMContentLoaded', () => {
   for (let i = 0; i < 28; i++) { const b = document.createElement('div'); b.className = 'wb'; b.style.animationDelay = `${(i * .05).toFixed(2)}s`; bw.appendChild(b); }
   rrules([]);
   rmodels();
+
+  // 调试模式初始化（恢复上次状态）
+  initDebugMode();
 
   // 连接后端
   initApp();
