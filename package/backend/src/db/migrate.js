@@ -254,6 +254,8 @@ INSERT INTO skills (user_id, name, emoji, description, builtin_type, allowed_too
 -- ── 增量迁移：给已有表追加新列（IF NOT EXISTS 保证幂等）────
 ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_name  VARCHAR(100) DEFAULT '我的助手';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_emoji VARCHAR(10)  DEFAULT '🤖';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_emoji    VARCHAR(10)  DEFAULT '👤';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url      VARCHAR(500);
 `;
 
 async function migrate() {
