@@ -252,10 +252,15 @@ INSERT INTO skills (user_id, name, emoji, description, builtin_type, allowed_too
   ON CONFLICT DO NOTHING;
 
 -- ── 增量迁移：给已有表追加新列（IF NOT EXISTS 保证幂等）────
-ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_name  VARCHAR(100) DEFAULT '我的助手';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_emoji VARCHAR(10)  DEFAULT '🤖';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_emoji    VARCHAR(10)  DEFAULT '👤';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url      VARCHAR(500);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS talent          VARCHAR(50)  DEFAULT 'default';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS soul_prompt     TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_name  VARCHAR(100) DEFAULT '我的助手';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_emoji VARCHAR(10)  DEFAULT '🤖';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_model VARCHAR(50);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_searchable   BOOLEAN      DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login      TIMESTAMPTZ;
 `;
 
 async function migrate() {
