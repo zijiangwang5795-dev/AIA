@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
     id 'com.google.gms.google-services'   // Firebase
 }
 
@@ -35,13 +34,10 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = '17'
-    }
 }
 
 dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.core:core:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.webkit:webkit:1.10.0'        // WebView 增强
     implementation 'com.google.android.material:material:1.11.0'
@@ -53,14 +49,11 @@ dependencies {
     // JSON 解析
     implementation 'org.json:json:20231013'
 
-    // Coroutines
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
-
     // SharedPreferences 数据存储
-    implementation 'androidx.preference:preference-ktx:1.2.1'
+    implementation 'androidx.preference:preference:1.2.1'
 
     // Firebase BoM（统一版本管理）
     implementation platform('com.google.firebase:firebase-bom:32.7.2')
-    implementation 'com.google.firebase:firebase-messaging-ktx'   // FCM 推送
-    implementation 'com.google.firebase:firebase-analytics-ktx'  // 行为分析（可选）
+    implementation 'com.google.firebase:firebase-messaging'   // FCM 推送
+    implementation 'com.google.firebase:firebase-analytics'  // 行为分析（可选）
 }
