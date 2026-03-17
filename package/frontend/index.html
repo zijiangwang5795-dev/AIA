@@ -156,7 +156,7 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
 /* ── PAGES ── */
 .page{display:none}
-.page.active{display:block;animation:pgin .22s ease}
+.page.active{display:block;animation:pgin .22s ease;min-height:100%}
 
 /* ── CHAT ── */
 .chat-wrap{display:flex;flex-direction:column;height:100%}
@@ -1630,6 +1630,9 @@ function gp(pg){
   const nb=document.getElementById(`nb-${nbKey}`);
   if(nb)nb.classList.add('active');
   document.getElementById('scr').scrollTop=0;
+  // Hide botnav on chat page so the fixed chat-input-bar is fully visible
+  const botnav=document.querySelector('.botnav');
+  if(botnav) botnav.style.display=(pg==='chat')?'none':'';
   rp(pg);
 }
 function gsp(pg){gp(pg);document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));document.getElementById('nb-more').classList.add('active');}
