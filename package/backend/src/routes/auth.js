@@ -2,8 +2,12 @@
 const { query } = require('../db/client');
 const bcrypt = require('bcryptjs');
 const { v4: uuid } = require('uuid');
+const axios = require('axios');
 const { syncAgentConfig } = require('../brain/openclaw/client');
 const { buildStaticPersona } = require('../personality/assembler');
+
+// 微信 OAuth state 临时存储（10 分钟 TTL）
+const WECHAT_STATES = new Map();
 
 module.exports = async function authRoutes(app) {
 
@@ -210,6 +214,149 @@ module.exports = async function authRoutes(app) {
       preferredModel: u.preferred_model,
       isSearchable: u.is_searchable,
     };
+  });
+
+  // ── 微信 OAuth：获取授权 URL ──────────────────────
+  // GET /auth/wechat/url          → 登录（无需认证）
+  // GET /auth/wechat/url?bind=1   → 绑定到已登录账号（需要 JWT）
+  app.get('/wechat/url', async (req, reply) => {
+    const appId  = process.env.WECHAT_APP_ID;
+    const secret = process.env.WECHAT_SECRET;
+    if (!appId || !secret) {
+      return reply.code(503).send({ error: 'WeChat OAuth 未配置，请检查 WECHAT_APP_ID 和 WECHAT_SECRET' });
+    }
+
+    // 绑定模式需要验证已登录用户
+    let bindUserId = null;
+    if (req.query.bind === '1') {
+      try {
+        await req.jwtVerify();
+        bindUserId = req.user.sub;
+      } catch {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+    }
+
+    // 清理过期 state
+    const now = Date.now();
+    for (const [k, v] of WECHAT_STATES.entries()) {
+      if (now - v.ts > 600000) WECHAT_STATES.delete(k);
+    }
+
+    const state = uuid();
+    WECHAT_STATES.set(state, { ts: now, userId: bindUserId });
+
+    const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const redirectUri = encodeURIComponent(`${backendUrl}/auth/wechat/callback`);
+    const url = `https://open.weixin.qq.com/connect/oauth2/authorize` +
+      `?appid=${appId}` +
+      `&redirect_uri=${redirectUri}` +
+      `&response_type=code` +
+      `&scope=snsapi_userinfo` +
+      `&state=${state}` +
+      `#wechat_redirect`;
+
+    return { url };
+  });
+
+  // ── 微信 OAuth：回调处理 ───────────────────────────
+  app.get('/wechat/callback', async (req, reply) => {
+    const { code, state } = req.query;
+    const frontendUrl = process.env.FRONTEND_URL ||
+      process.env.BACKEND_URL ||
+      `http://localhost:${process.env.PORT || 3000}`;
+
+    // 校验 state
+    const stateData = code && state ? WECHAT_STATES.get(state) : null;
+    if (!stateData) {
+      return reply.redirect(`${frontendUrl}/?wechat_error=${encodeURIComponent('无效的登录状态，请重试')}`);
+    }
+    WECHAT_STATES.delete(state);
+
+    try {
+      // 1. code → access_token + openid
+      const tokenRes = await axios.get('https://api.weixin.qq.com/sns/oauth2/access_token', {
+        params: {
+          appid:      process.env.WECHAT_APP_ID,
+          secret:     process.env.WECHAT_SECRET,
+          code,
+          grant_type: 'authorization_code',
+        },
+        timeout: 10000,
+      });
+      const { access_token, openid, errcode, errmsg } = tokenRes.data;
+      if (errcode) throw new Error(`微信接口错误 ${errcode}: ${errmsg}`);
+
+      // 2. 获取用户信息（昵称、头像）
+      const infoRes = await axios.get('https://api.weixin.qq.com/sns/userinfo', {
+        params: { access_token, openid, lang: 'zh_CN' },
+        timeout: 10000,
+      });
+      const wxUser = infoRes.data;
+      if (wxUser.errcode) throw new Error(`获取微信用户信息失败: ${wxUser.errmsg}`);
+
+      let userId;
+
+      if (stateData.userId) {
+        // ── 绑定模式：将 openid 关联到已有账号 ──────
+        userId = stateData.userId;
+        await query(
+          `INSERT INTO oauth_accounts (user_id, provider, provider_id)
+           VALUES ($1, 'wechat', $2)
+           ON CONFLICT (provider, provider_id) DO NOTHING`,
+          [userId, openid]
+        );
+        // 若用户尚无头像 URL，补充微信头像
+        if (wxUser.headimgurl) {
+          await query(
+            `UPDATE users SET avatar_url=COALESCE(NULLIF(avatar_url,''), $2) WHERE id=$1`,
+            [userId, wxUser.headimgurl]
+          );
+        }
+      } else {
+        // ── 登录模式：查找已有账号或新建 ────────────
+        const oauthRow = await query(
+          `SELECT user_id FROM oauth_accounts WHERE provider='wechat' AND provider_id=$1`,
+          [openid]
+        );
+        if (oauthRow.rows[0]) {
+          userId = oauthRow.rows[0].user_id;
+        } else {
+          const newUserRes = await query(
+            `INSERT INTO users (display_name, avatar_url)
+             VALUES ($1, $2) RETURNING id`,
+            [wxUser.nickname || `微信用户`, wxUser.headimgurl || null]
+          );
+          userId = newUserRes.rows[0].id;
+          await query(
+            `INSERT INTO oauth_accounts (user_id, provider, provider_id)
+             VALUES ($1, 'wechat', $2)`,
+            [userId, openid]
+          );
+        }
+      }
+
+      // 更新最后登录时间
+      await query(`UPDATE users SET last_login=NOW() WHERE id=$1`, [userId]);
+
+      // 签发 Token
+      const accessToken  = app.jwt.sign({ sub: userId }, { expiresIn: '2h' });
+      const refreshToken = uuid();
+      const refreshHash  = await bcrypt.hash(refreshToken, 8);
+      await query(
+        `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+        [userId, refreshHash]
+      );
+
+      const params = new URLSearchParams({ wechat_token: accessToken, wechat_refresh: refreshToken });
+      if (stateData.userId) params.set('wechat_bound', '1');
+      return reply.redirect(`${frontendUrl}/?${params.toString()}`);
+
+    } catch (e) {
+      app.log.error('WeChat OAuth error:', e.message);
+      return reply.redirect(`${frontendUrl}/?wechat_error=${encodeURIComponent(e.message)}`);
+    }
   });
 
   // ── 退出登录 ──────────────────────────────────────
