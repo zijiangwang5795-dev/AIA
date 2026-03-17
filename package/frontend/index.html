@@ -1446,8 +1446,22 @@ const SKILLS=[
 ];
 
 // ══════════════════ AUTH
-function loginWith(p){
-  toast(`${p} OAuth 需配置 .env 中的 App Secret，请使用手机号登录`, 'info');
+async function loginWith(p) {
+  if (p !== 'wechat') {
+    toast(`${p} OAuth 需配置 .env 中的 App Secret，请使用手机号登录`, 'info');
+    return;
+  }
+  try {
+    const res = await fetch(`${getApiBase()}/auth/wechat/url`);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      toast(data.error || '微信登录未配置，请使用手机号登录', 'info');
+      return;
+    }
+    window.location.href = data.url;
+  } catch {
+    toast('无法获取微信登录链接，请检查网络', 'error');
+  }
 }
 
 async function sendOtp(){
@@ -1895,6 +1909,39 @@ function loadSample() {
 
 // ══════════════════ STARTUP — 连接后端 + 加载数据
 async function initApp() {
+  // ── 处理微信 OAuth 回调（URL 中携带 wechat_token 参数）──
+  const _urlParams = new URLSearchParams(window.location.search);
+  const _wxToken   = _urlParams.get('wechat_token');
+  const _wxRefresh = _urlParams.get('wechat_refresh');
+  const _wxBound   = _urlParams.get('wechat_bound');
+  const _wxError   = _urlParams.get('wechat_error');
+  // 清理 URL 参数，避免刷新时重复触发
+  if (_wxToken || _wxError) window.history.replaceState({}, '', '/');
+
+  if (_wxError) {
+    toast(`微信登录失败：${_wxError}`, 'error');
+  }
+  if (_wxToken) {
+    try {
+      const _meRes = await fetch(`${getApiBase()}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${_wxToken}` },
+      });
+      if (_meRes.ok) {
+        const me = await _meRes.json();
+        Auth.save(_wxToken, me);
+        if (_wxRefresh) localStorage.setItem('ai_refresh', _wxRefresh);
+        doLogin(me);
+        if (_wxBound) toast('微信账号绑定成功 ✓', 'success');
+        else toast(`微信登录成功，欢迎 ${me.displayName || '用户'}！`, 'success');
+        await loadTasksFromBackend().catch(() => {});
+        await loadSkillsFromBackend().catch(() => {});
+        rdash();
+        return;
+      }
+    } catch {}
+    toast('微信登录处理失败，请重试', 'error');
+  }
+
   // 检查后端连接
   let backendOk = false;
   try {
@@ -2596,6 +2643,14 @@ async function bindA(provider) {
       rauth();
     } catch (err) {
       toast(`登录失败: ${err.message}`, 'error');
+    }
+  } else if (provider === 'wechat') {
+    try {
+      const res = await apiFetch('/auth/wechat/url?bind=1');
+      if (res.error) { toast(res.error, 'info'); return; }
+      window.location.href = res.url;
+    } catch (err) {
+      toast(`${err.message || '微信绑定失败'}`, 'error');
     }
   } else {
     toast(`${provider} OAuth 需配置 .env 中的 App Secret`, 'info');
