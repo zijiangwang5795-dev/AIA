@@ -14,9 +14,14 @@
 
 🖥️ 后端 (Node.js + Fastify)
    ├── 第一层大脑：意图分类 + 路由决策（确定性，~50ms）
-   ├── 第二层大脑：ReAct Agent + 流式 SSE 输出
+   ├── 第二层大脑：ReAct Agent + 流式 SSE 输出（通过 OpenClaw）
    ├── 助手人格层：灵魂 + 天赋 + 运行时状态
    └── 工具：create_tasks / web_search / memory / calculator
+
+🦞 OpenClaw 网关（服务器部署，端口 18789）
+   ├── 统一承接所有 AI 推理请求（OpenAI 兼容接口）
+   ├── 管理 AI Provider Keys（DeepSeek / OpenAI / Claude / Ollama）
+   └── 支持流式 SSE、工具调用、会话管理
 
 🗄️ 数据库
    ├── PostgreSQL + pgvector（任务 / 记忆 / 情节向量）
@@ -28,12 +33,19 @@
 ## 快速开始（方式一：Docker）
 
 ```bash
+# 0. 先启动 OpenClaw（一次性，可复用）
+#    参考 https://github.com/openclaw/openclaw
+#    默认监听 http://localhost:18789
+openclaw start
+
 # 1. 克隆项目，进入 backend 目录
 cd backend/
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env，填入你的 DEEPSEEK_API_KEY
+# 编辑 .env：
+#   OPENCLAW_URL=http://<your-server>:18789  ← 指向 OpenClaw
+#   在 OpenClaw 侧配置 DEEPSEEK_API_KEY / OPENAI_API_KEY
 
 # 3. 启动所有服务
 docker-compose up -d
@@ -74,7 +86,8 @@ npm install
 
 # 配置环境
 cp .env.example .env
-vim .env   # 填入 DEEPSEEK_API_KEY 等
+vim .env   # 重点填写 OPENCLAW_URL（后端 AI 调用统一走 OpenClaw）
+           # 若 OPENCLAW_URL 未填，自动降级为直连 DEEPSEEK_API_KEY
 
 # 初始化数据库
 npm run db:migrate
@@ -121,14 +134,65 @@ cp frontend/index.html VoiceTaskApp/app/src/main/assets/www/
 
 ---
 
+## OpenClaw 部署模式
+
+通过 `OPENCLAW_MODE` 选择接入方式：
+
+### Mode A：`dedicated`（独占，默认）— 一用户一实例
+
+每个用户对应自己的 OpenClaw 实例。用户在 AI 记忆中配置自己的实例地址：
+
+| 记忆 key | 说明 |
+|----------|------|
+| `_openclaw_url` | 用户自己的 OpenClaw 地址，如 `http://my-server:18789` |
+| `_openclaw_token` | 对应实例的认证 token（可选） |
+
+未配置时，回退到全局 `OPENCLAW_URL`。
+
+**适合：** 企业私有化、用户自持服务器、强数据隔离场景。
+
+### Mode B：`shared`（共享）— 多用户共享一实例
+
+一个 OpenClaw 实例服务所有用户，通过 `agentId = aia_{userId}` 区分：
+
+```
+用户 A ─┐
+用户 B ─┼─→ 后端 → 单个 OpenClaw 实例 → AI
+用户 C ─┘     user: "aia_{userId}"
+              X-OpenClaw-Agent: "aia_{userId}"
+```
+
+**适合：** SaaS 多租户、资源受限、快速部署场景。
+
+---
+
 ## 环境变量说明
+
+### OpenClaw 网关
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `DEEPSEEK_API_KEY` | ✅ | DeepSeek API Key（主要模型） |
-| `OPENAI_API_KEY` | ⚡ | OpenAI Key（gpt-4o-mini + embedding，可选） |
-| `ANTHROPIC_API_KEY` | ⚡ | Claude API Key（可选） |
-| `TAVILY_API_KEY` | ⚡ | 搜索 API（技能执行需要，可选） |
+| `OPENCLAW_URL` | ✅ | OpenClaw 服务地址，如 `http://192.168.1.x:18789` |
+| `OPENCLAW_TOKEN` | ⚡ | 认证 token，`gateway.auth.mode` 开启时需要 |
+| `OPENCLAW_MODE` | - | `dedicated`（默认）或 `shared` |
+| `OPENCLAW_DEFAULT_MODEL` | - | 默认路由模型，默认 `deepseek-chat` |
+| `OPENCLAW_EMBED_MODEL` | - | 向量化模型，默认 `text-embedding-3-small` |
+
+> AI Provider Keys（DeepSeek / OpenAI / Claude）在 **OpenClaw 侧**配置，后端无需持有。
+
+### 降级直连（OPENCLAW_URL 未配置时生效）
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `DEEPSEEK_API_KEY` | ✅* | DeepSeek API Key |
+| `OPENAI_API_KEY` | ⚡ | OpenAI Key（embedding + gpt-4o-mini） |
+| `ANTHROPIC_API_KEY` | ⚡ | Claude API Key |
+| `TAVILY_API_KEY` | ⚡ | 搜索 API（可选） |
+
+### 基础配置
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
 | `DATABASE_URL` | ✅ | PostgreSQL 连接串 |
 | `REDIS_URL` | ✅ | Redis 连接串 |
 | `JWT_SECRET` | ✅ | JWT 签名密钥（生产环境必须改） |
@@ -185,7 +249,7 @@ event: tool_start  → { name, args }            // 工具调用开始
 event: tool_done   → { name, result }          // 工具完成
 event: task_extract→ { tasks[], summary }      // 提取到任务
 event: error       → { message }               // 错误
-event: done        → { totalTokens, latencyMs, costUsd, model }
+event: done        → { totalTokens, latencyMs, costUsd, model, gateway }
 ```
 
 ---
@@ -242,7 +306,8 @@ ai-assistant/
 │   │   ├── personality/     # 人格层（Soul/Talent/Runtime）
 │   │   ├── brain/
 │   │   │   ├── layer1/      # 确定性引擎
-│   │   │   └── layer2/      # ReAct Agent
+│   │   │   ├── layer2/      # ReAct Agent（调用 OpenClaw）
+│   │   │   └── openclaw/    # OpenClaw 网关客户端
 │   │   ├── tools/           # 工具注册表
 │   │   ├── memory/          # 记忆系统（暂用 PostgreSQL）
 │   │   ├── auth/            # JWT + OTP

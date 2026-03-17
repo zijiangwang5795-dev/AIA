@@ -78,18 +78,13 @@ async function buildMemoryContext(userId) {
   }
 }
 
-// ── 情节记忆检索（相似查询）─────────────────────────
+// ── 情节记忆检索（相似查询，通过 OpenClaw 获取 embedding）─
 async function searchEpisodicMemory(userId, query_text) {
-  // 如果没有 OpenAI key 或 pgvector，返回空
-  if (!process.env.OPENAI_API_KEY) return [];
+  const { isOpenClawConfigured, createEmbedding } = require('../brain/openclaw/client');
+  // OpenClaw 未配置且无 OpenAI key 时跳过向量检索
+  if (!isOpenClawConfigured() && !process.env.OPENAI_API_KEY) return [];
   try {
-    const { OpenAI } = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const embRes = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: query_text,
-    });
-    const embedding = embRes.data[0].embedding;
+    const embedding = await createEmbedding(query_text);
     const res = await query(
       `SELECT summary, 1 - (embedding <=> $1::vector) AS similarity
        FROM episodic_memories WHERE user_id=$2
