@@ -97,6 +97,21 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .search-inp{flex:1;padding:10px 14px;background:var(--s2);border:1px solid var(--bd);border-radius:12px;color:var(--tx);font-size:14px;font-family:inherit}
 .search-inp:focus{outline:none;border-color:var(--ac)}
 .notif-dot{width:8px;height:8px;border-radius:50%;background:var(--pk);display:inline-block;margin-left:4px}
+/* ── FRIEND PICKER MODAL ── */
+.fpicker-overlay{position:fixed;inset:0;z-index:200;background:rgba(6,6,15,.85);backdrop-filter:blur(8px);display:flex;align-items:flex-end;justify-content:center}
+.fpicker-sheet{width:100%;max-width:480px;background:var(--s1);border-radius:24px 24px 0 0;border-top:1px solid var(--bd);padding:0 0 calc(16px + var(--sb));max-height:75vh;display:flex;flex-direction:column}
+.fpicker-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.fpicker-title{font-size:16px;font-weight:700}
+.fpicker-close{width:32px;height:32px;border-radius:50%;background:var(--s3);border:none;color:var(--t2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.fpicker-search{padding:10px 16px;flex-shrink:0}
+.fpicker-list{overflow-y:auto;flex:1;padding:0 12px 8px}
+.fpicker-item{display:flex;align-items:center;gap:12px;padding:12px 10px;border-radius:14px;cursor:pointer;transition:background .12s}
+.fpicker-item:hover,.fpicker-item:active{background:var(--s2)}
+.fpicker-av{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(124,111,255,.3),rgba(255,107,157,.2));border:1px solid rgba(124,111,255,.3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.fpicker-info{flex:1;min-width:0}
+.fpicker-name{font-size:14px;font-weight:700}
+.fpicker-sub{font-size:11px;color:var(--t2);margin-top:2px}
+.fpicker-arr{font-size:18px;color:var(--t3)}
 /* ── MARKET ── */
 .market-hero{margin:0 0 20px;padding:20px;background:linear-gradient(135deg,rgba(255,107,157,.15),rgba(245,200,66,.08));border:1px solid rgba(255,107,157,.2);border-radius:20px;position:relative;overflow:hidden}
 .market-hero::before{content:'🛒';position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:52px;opacity:.25}
@@ -1427,6 +1442,22 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
 
 </div><!-- /app -->
 
+<!-- ═══ FRIEND PICKER MODAL ═══ -->
+<div class="fpicker-overlay" id="friendPickerModal" style="display:none" onclick="if(event.target===this)hideFriendPicker()">
+  <div class="fpicker-sheet">
+    <div class="fpicker-hd">
+      <div class="fpicker-title">💬 选择好友</div>
+      <button class="fpicker-close" onclick="hideFriendPicker()">×</button>
+    </div>
+    <div class="fpicker-search">
+      <input class="search-inp" id="fpickerSearch" placeholder="搜索好友..." oninput="renderFriendPickerList(this.value)">
+    </div>
+    <div class="fpicker-list" id="fpickerList">
+      <div style="text-align:center;padding:32px 0;color:var(--t3);font-size:13px">加载中...</div>
+    </div>
+  </div>
+</div>
+
 <div class="twrap" id="twrap"></div>
 
 <script>
@@ -1472,6 +1503,7 @@ const SKILLS=[
   {id:'deep',e:'🔬',n:'深度分析',d:'多步推理，适合需要深度思考的复杂场景',t:['web_search','save_memory'],bt:'deep-analysis',color:'rgba(255,107,157,.08)'},
   {id:'calc',e:'🧮',n:'智能计算',d:'处理数值计算、数据汇总等任务',t:['calculator'],bt:'analyze',color:'rgba(77,160,255,.08)'},
   {id:'custom',e:'✨',n:'自定义技能',d:'创建属于你的个人 Agent 技能',t:[],bt:'custom',color:'rgba(61,255,160,.06)'},
+  {id:'send-message',e:'💬',n:'发消息给好友',d:'选择好友直接跳转聊天；或语音说"通知张三…"让助手代发',t:['send_friend_message'],bt:'send-message',color:'rgba(255,107,157,.08)'},
 ];
 
 // ══════════════════ AUTH
@@ -2133,10 +2165,24 @@ async function analyze() {
   let streamText = '';
 
   try {
+    // 上报客户端本地技能，让 AI 感知可跳转聊天界面
+    const clientSkills = [
+      {
+        name: 'open_chat_with_friend',
+        description: '在助手代发消息后，导航到与该好友的聊天界面，让用户查看对话记录。',
+        parameters: {
+          type: 'object',
+          properties: {
+            friendName: { type: 'string', description: '好友的昵称，用于在本地好友列表中匹配' },
+          },
+          required: ['friendName'],
+        },
+      },
+    ];
     const resp = await fetch(`${getApiBase()}/api/analyze`, {
       method: 'POST',
       headers: Auth.headers(),
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, clientSkills }),
     });
 
     if (!resp.ok) {
@@ -2201,6 +2247,27 @@ async function analyze() {
 
           case 'tool_done':
             alog(logEl, `OBS    ${data.name} → ${JSON.stringify(data.result || {}).slice(0, 80)}`, 'lo');
+            // 助手代发消息成功后，展示跳转按钮
+            if (data.name === 'send_friend_message' && data.result?.sent) {
+              const r = data.result;
+              const msgSentEl = document.createElement('div');
+              msgSentEl.className = 'll';
+              msgSentEl.style.cssText = 'background:rgba(255,107,157,.08);border:1px solid rgba(255,107,157,.2);border-radius:12px;padding:10px 14px;margin-top:6px';
+              msgSentEl.innerHTML = `
+                <div style="font-size:13px;font-weight:700;color:var(--pk);margin-bottom:4px">💬 消息已代发</div>
+                <div style="font-size:12px;color:var(--t2);margin-bottom:8px">发给 <b style="color:var(--tx)">${r.to || ''}</b>："${(r.message||'').slice(0,50)}${(r.message||'').length>50?'…':''}"</div>
+                <button onclick="navigateToChatByName('${(r.to||'').replace(/'/g,"\\'")}');this.closest('.ll').remove()" style="padding:6px 14px;border-radius:100px;background:var(--pk);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer">查看对话 ›</button>`;
+              logEl.appendChild(msgSentEl);
+              logEl.scrollTop = logEl.scrollHeight;
+            }
+            break;
+
+          case 'client_action':
+            // 客户端技能：LLM 请求本地执行
+            alog(logEl, `CLI    ${data.name}(${JSON.stringify(data.args || {}).slice(0, 60)})`, 'la');
+            if (data.name === 'open_chat_with_friend' && data.args?.friendName) {
+              navigateToChatByName(data.args.friendName);
+            }
             break;
 
           case 'task_extract':
@@ -2411,7 +2478,8 @@ function rskills() {
   document.getElementById('skList').innerHTML = items.map(s => {
     const skId = s.id || s.builtin_type || '';
     const isAnalyze = skId === 'analyze' || s.bt === 'analyze-voice';
-    const onclick = isAnalyze ? "gp('voice')" : `openSkillRun('${skId}')`;
+    const isSendMsg = skId === 'send-message' || s.bt === 'send-message';
+    const onclick = isAnalyze ? "gp('voice')" : isSendMsg ? "openSendMessageSkill()" : `openSkillRun('${skId}')`;
     return `
     <div class="skill-big" onclick="${onclick}" style="--sk-color:${s.color || 'rgba(124,111,255,.1)'}">
       <div class="sb-emoji">${s.emoji || s.e || '⚡'}</div>
@@ -3184,6 +3252,87 @@ async function removeFriend(userId) {
 }
 
 function handleFriendRelation() { /* handled by fpRelBtn onclick */ }
+
+// ══════════════════ SEND-MESSAGE SKILL — 直接使用 & 好友选择器
+let _fpickerCallback = null;
+
+async function openSendMessageSkill() {
+  // 确保好友列表已加载
+  if (!Auth.token) { toast('请先登录', 'error'); return; }
+  if (!FRIENDS_LIST.length) {
+    await rfriends().catch(() => {});
+  }
+  if (!FRIENDS_LIST.length) {
+    toast('还没有好友，先添加好友吧 👥', 'info');
+    gp('friends');
+    return;
+  }
+  showFriendPicker((friendId, friendName, friendAvatar) => {
+    openChatWith(friendId, friendName, friendAvatar);
+  });
+}
+
+function showFriendPicker(callback) {
+  _fpickerCallback = callback;
+  const modal = document.getElementById('friendPickerModal');
+  const searchEl = document.getElementById('fpickerSearch');
+  if (searchEl) searchEl.value = '';
+  renderFriendPickerList('');
+  modal.style.display = 'flex';
+  if (searchEl) setTimeout(() => searchEl.focus(), 150);
+}
+
+function hideFriendPicker() {
+  document.getElementById('friendPickerModal').style.display = 'none';
+  _fpickerCallback = null;
+}
+
+function renderFriendPickerList(query) {
+  const q = (query || '').toLowerCase();
+  const filtered = FRIENDS_LIST.filter(f =>
+    !q ||
+    (f.friendName || '').toLowerCase().includes(q) ||
+    (f.assistantName || '').toLowerCase().includes(q)
+  );
+  const el = document.getElementById('fpickerList');
+  if (!filtered.length) {
+    el.innerHTML = `<div style="text-align:center;padding:32px 0;color:var(--t3);font-size:13px">${q ? '没有匹配的好友' : '暂无好友'}</div>`;
+    return;
+  }
+  el.innerHTML = filtered.map(f => `
+    <div class="fpicker-item" onclick="onFriendPickerSelect('${f.friendId}','${(f.assistantName||f.friendName).replace(/'/g,'&#39;')}','${(f.assistantEmoji||f.friendAvatar||'🤖').replace(/'/g,'&#39;')}')">
+      <div class="fpicker-av">${f.assistantEmoji || f.friendAvatar || '🤖'}</div>
+      <div class="fpicker-info">
+        <div class="fpicker-name">${f.assistantName || f.friendName}</div>
+        <div class="fpicker-sub">${f.friendName} 的助手${f.unreadCount ? ` · <span style="color:var(--pk);font-weight:700">${f.unreadCount} 条新消息</span>` : ''}</div>
+      </div>
+      <div class="fpicker-arr">›</div>
+    </div>`).join('');
+}
+
+function onFriendPickerSelect(friendId, friendName, friendAvatar) {
+  hideFriendPicker();
+  if (_fpickerCallback) {
+    _fpickerCallback(friendId, friendName, friendAvatar);
+  } else {
+    openChatWith(friendId, friendName, friendAvatar);
+  }
+}
+
+// 由 AI 意图驱动：根据好友名称跳转到聊天界面
+function navigateToChatByName(friendName) {
+  if (!friendName) return;
+  const q = friendName.toLowerCase();
+  const friend = FRIENDS_LIST.find(f =>
+    (f.friendName || '').toLowerCase().includes(q) ||
+    (f.assistantName || '').toLowerCase().includes(q)
+  );
+  if (friend) {
+    openChatWith(friend.friendId, friend.assistantName || friend.friendName, friend.assistantEmoji || friend.friendAvatar);
+  } else {
+    toast(`在好友列表中未找到"${friendName}"`, 'error');
+  }
+}
 
 // ══════════════════ PRIVACY SETTINGS
 async function loadPrivacySettings() {
