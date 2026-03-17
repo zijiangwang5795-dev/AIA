@@ -540,12 +540,6 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <h1><em>AI</em> 助手</h1>
       <p>你的智能语音助理<br>说话就能完成任务</p>
     </div>
-    <div class="orow">
-      <button class="obtn" onclick="loginWith('wechat')"><span class="oic">💬</span><span>微信</span></button>
-      <button class="obtn" onclick="loginWith('apple')"><span class="oic">🍎</span><span>Apple</span></button>
-      <button class="obtn" onclick="loginWith('google')"><span class="oic">🔵</span><span>Google</span></button>
-    </div>
-    <div class="divider">或手机号登录</div>
     <div class="istack">
       <input class="inp" type="tel" id="phoneInput" placeholder="+86 手机号" autocomplete="tel">
       <div class="otprow">
@@ -553,6 +547,10 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
         <button class="btn bg" id="otpBtn" onclick="sendOtp()" style="flex-shrink:0;padding:11px 16px;font-size:13px">发送</button>
       </div>
       <button class="btn bp bfull" onclick="verifyOtp()">进入助手</button>
+    </div>
+    <div class="divider">或使用微信登录</div>
+    <div class="orow" style="justify-content:center">
+      <button class="obtn" onclick="loginWith('wechat')" style="max-width:200px"><span class="oic">💬</span><span>微信一键登录</span></button>
     </div>
   </div>
 </div>
@@ -567,6 +565,7 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <span class="logo-name"><em>AI</em> 助手</span>
     </div>
     <div class="topbar-r">
+      <div id="tierBadge" style="display:none;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s" onclick="openSubscriptionPage()"></div>
       <div class="online-pill" id="onlinePill">在线</div>
       <div class="uav" id="uAv">U</div>
     </div>
@@ -582,6 +581,18 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
         <div class="hero-greeting" id="timeGreet">早上好 👋</div>
         <div class="hero-name">你好，<span class="ac" id="uName">朋友</span></div>
         <div class="hero-sub">今天有 <strong id="taskCount" style="color:var(--tx)">3</strong> 项待处理任务，<br>开口说话，让助手帮你搞定。</div>
+      </div>
+
+      <!-- Upgrade Banner (free users only) -->
+      <div id="upgradeBanner" style="display:none;margin:0 16px 14px">
+        <div style="background:linear-gradient(135deg,rgba(124,111,255,.15),rgba(255,107,157,.1));border:1px solid rgba(124,111,255,.3);border-radius:18px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSubscriptionPage()">
+          <div style="font-size:26px">💎</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;letter-spacing:-.2px">升级 Pro · 解锁更多功能</div>
+            <div style="font-size:12px;color:var(--t2);margin-top:2px">2000次/月 · 自定义人格 · 优先客服</div>
+          </div>
+          <div style="font-size:18px;color:var(--ac)">›</div>
+        </div>
       </div>
 
       <!-- Voice Hero -->
@@ -641,9 +652,12 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       </div>
 
       <!-- Ask assistant input -->
+      <div class="section-hd" style="margin-top:4px">
+        <div class="section-title">💬 发消息给助手</div>
+      </div>
       <div class="home-ask-bar">
         <div class="home-ask-wrap">
-          <textarea class="home-ask-input" id="homeAskInput" rows="1" placeholder="问助手任何问题，或说「帮我发消息给…」"
+          <textarea class="home-ask-input" id="homeAskInput" rows="1" placeholder="输入消息，按回车发送…"
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendHomeAsk()}"
             oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
           <button class="home-ask-send" onclick="sendHomeAsk()">➤</button>
@@ -974,7 +988,7 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     </div>
     <!-- Search bar -->
     <div class="search-row">
-      <input class="search-inp" id="friendSearch" placeholder="搜索手机号或昵称..." oninput="onFriendSearchInput(this.value)" onkeydown="if(event.key==='Enter')searchUsers()">
+      <input class="search-inp" id="friendSearch" placeholder="搜索手机号或昵称，点击好友发消息…" oninput="onFriendSearchInput(this.value)" onkeydown="if(event.key==='Enter')searchUsers()">
       <button class="btn bp btn-sm" onclick="searchUsers()" style="border-radius:12px;padding:10px 16px">搜索</button>
     </div>
     <!-- Pending requests badge -->
@@ -1519,7 +1533,48 @@ function doLogin(user){
   document.getElementById('logoutSub').textContent = user.phone || '切换账号';
   updateGreeting();
   renderAll();
+  loadUserTier();
   toast(`欢迎回来，${user.displayName || user.name || '用户'}！`,'success');
+}
+
+async function loadUserTier() {
+  try {
+    const res = await apiFetch('/api/subscription');
+    const plan = res.plan || { id: 'free', name: '免费版' };
+    const usage = res.usage || { used: 0, limit: 100, pct: 0 };
+    // 更新 subState 供订阅页使用
+    subState.current = plan;
+    subState.usage = usage;
+    // 更新"更多"页状态行
+    const row = document.getElementById('subStatusRow');
+    if (row) row.textContent = `${plan.name} · ${usage.used}/${usage.limit === -1 ? '∞' : usage.limit} 次`;
+    // 顶部 tier badge
+    const badge = document.getElementById('tierBadge');
+    if (badge) {
+      badge.style.display = 'flex';
+      if (plan.id === 'enterprise') {
+        badge.textContent = '企业版';
+        badge.style.background = 'rgba(245,200,66,.15)';
+        badge.style.color = 'var(--gold)';
+        badge.style.border = '1px solid rgba(245,200,66,.3)';
+      } else if (plan.id === 'pro') {
+        badge.textContent = 'Pro';
+        badge.style.background = 'rgba(124,111,255,.15)';
+        badge.style.color = 'var(--ac)';
+        badge.style.border = '1px solid rgba(124,111,255,.3)';
+      } else {
+        badge.textContent = '免费版 · 升级';
+        badge.style.background = 'rgba(255,107,157,.08)';
+        badge.style.color = 'var(--pk)';
+        badge.style.border = '1px solid rgba(255,107,157,.2)';
+      }
+    }
+    // 首页升级横幅（仅免费用户）
+    const banner = document.getElementById('upgradeBanner');
+    if (banner) banner.style.display = plan.id === 'free' ? 'block' : 'none';
+  } catch (e) {
+    console.warn('loadUserTier failed:', e.message);
+  }
 }
 
 async function logoutUser(){
