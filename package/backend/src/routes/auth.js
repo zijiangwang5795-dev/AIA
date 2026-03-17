@@ -108,16 +108,19 @@ module.exports = async function authRoutes(app) {
     // 更新最后登录
     await query(`UPDATE users SET last_login=NOW() WHERE id=$1`, [user.id]);
 
-    // 签发 Token
+    // 签发 Token（格式：accessToken = JWT；refreshToken = {uuid}.{secret}）
     const accessToken = app.jwt.sign({ sub: user.id, phone }, { expiresIn: '2h' });
-    const refreshToken = uuid();
-    const refreshHash = await bcrypt.hash(refreshToken, 8);
+    const secret = uuid();
+    const refreshHash = await bcrypt.hash(secret, 8);
 
-    await query(
+    const tokenRes = await query(
       `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+       VALUES ($1, $2, NOW() + INTERVAL '30 days') RETURNING id`,
       [user.id, refreshHash]
     );
+    const tokenId = tokenRes.rows[0].id;
+    // tokenId.secret 格式支持 O(1) 查找，同时保留 bcrypt 校验安全性
+    const refreshToken = `${tokenId}.${secret}`;
 
     // 清理 OTP
     await query(`DELETE FROM otp_codes WHERE phone=$1`, [phone]);
@@ -151,19 +154,45 @@ module.exports = async function authRoutes(app) {
   });
 
   // ── 刷新 Token ────────────────────────────────────
-  app.post('/refresh', async (req, reply) => {
-    const { refreshToken } = req.body || {};
-    if (!refreshToken) return reply.code(400).send({ error: 'refreshToken required' });
+  // 格式：`{tokenId}.{secret}`
+  // tokenId 用于 O(1) DB 查找，secret 再 bcrypt 校验
+  app.post('/refresh', {
+    config: { rateLimit: { max: 20, timeWindow: '10 minutes', keyGenerator: (req) => `refresh:${req.ip}` } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['refreshToken'],
+        properties: { refreshToken: { type: 'string', minLength: 10 } },
+      },
+    },
+  }, async (req, reply) => {
+    const { refreshToken } = req.body;
 
-    const tokens = await query(
-      `SELECT * FROM refresh_tokens WHERE expires_at > NOW()`,
-      []
-    );
+    // 拆分 tokenId.secret（向下兼容旧格式纯 UUID）
+    const dotIdx = refreshToken.indexOf('.');
+    const tokenId = dotIdx > 0 ? refreshToken.slice(0, dotIdx) : null;
+    const secret  = dotIdx > 0 ? refreshToken.slice(dotIdx + 1) : refreshToken;
 
-    // 遍历验证（生产环境应换成更高效的方式）
+    let rows;
+    if (tokenId) {
+      // 新格式：直接按 token_id 查找，O(1)
+      const res = await query(
+        `SELECT * FROM refresh_tokens WHERE id=$1 AND expires_at > NOW()`,
+        [tokenId]
+      );
+      rows = res.rows;
+    } else {
+      // 旧格式兼容：按 user_id 无法定位，仍需扫描（但数量极少因有过期清理）
+      const res = await query(
+        `SELECT * FROM refresh_tokens WHERE expires_at > NOW() LIMIT 500`,
+        []
+      );
+      rows = res.rows;
+    }
+
     let matched = null;
-    for (const row of tokens.rows) {
-      if (await bcrypt.compare(refreshToken, row.token_hash)) {
+    for (const row of rows) {
+      if (await bcrypt.compare(secret, row.token_hash)) {
         matched = row;
         break;
       }
@@ -171,8 +200,23 @@ module.exports = async function authRoutes(app) {
 
     if (!matched) return reply.code(401).send({ error: 'Invalid or expired refresh token' });
 
-    const accessToken = app.jwt.sign({ sub: matched.user_id }, { expiresIn: '2h' });
-    return { accessToken };
+    // 签发新 access token
+    const userRes = await query(`SELECT id, phone FROM users WHERE id=$1`, [matched.user_id]);
+    const user = userRes.rows[0];
+    if (!user) return reply.code(401).send({ error: 'User not found' });
+
+    const accessToken = app.jwt.sign({ sub: user.id, phone: user.phone }, { expiresIn: '2h' });
+
+    // 轮换 refresh token（Refresh Token Rotation）
+    const newSecret = uuid();
+    const newHash = await bcrypt.hash(newSecret, 8);
+    await query(
+      `UPDATE refresh_tokens SET token_hash=$1, expires_at=NOW() + INTERVAL '30 days' WHERE id=$2`,
+      [newHash, matched.id]
+    );
+    const newRefreshToken = `${matched.id}.${newSecret}`;
+
+    return { accessToken, refreshToken: newRefreshToken };
   });
 
   // ── 获取当前用户 ──────────────────────────────────

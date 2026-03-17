@@ -3,21 +3,39 @@ const { query } = require('../db/client');
 const { optionalAuth } = require('../auth/middleware');
 
 // ── 任务路由 ──────────────────────────────────────────
+// 允许的任务状态白名单（防止枚举注入）
+const VALID_TASK_STATUSES = new Set(['pending', 'done', 'all']);
+const VALID_PRIORITIES    = new Set(['high', 'med', 'low']);
+const MAX_LIMIT = 200;
+
 async function tasksRoutes(app) {
   app.get('/tasks', { preHandler: [optionalAuth] }, async (req) => {
-    const { status = 'pending', limit = 50, offset = 0 } = req.query;
-    const statusFilter = status === 'all'
-      ? `status IN ('pending','done')`
-      : `status = '${status}'`;
+    const rawStatus = req.query.status || 'pending';
+    const status = VALID_TASK_STATUSES.has(rawStatus) ? rawStatus : 'pending';
+    const limit  = Math.min(Math.max(1, parseInt(req.query.limit) || 50), MAX_LIMIT);
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
 
-    const res = await query(
-      `SELECT * FROM tasks WHERE user_id=$1 AND ${statusFilter}
-       ORDER BY
-         CASE priority WHEN 'high' THEN 1 WHEN 'med' THEN 2 ELSE 3 END,
-         created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [req.userId, limit, offset]
-    );
+    // 使用参数化查询消除 SQL 注入风险
+    let res;
+    if (status === 'all') {
+      res = await query(
+        `SELECT * FROM tasks WHERE user_id=$1 AND status IN ('pending','done')
+         ORDER BY
+           CASE priority WHEN 'high' THEN 1 WHEN 'med' THEN 2 ELSE 3 END,
+           created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [req.userId, limit, offset]
+      );
+    } else {
+      res = await query(
+        `SELECT * FROM tasks WHERE user_id=$1 AND status=$4
+         ORDER BY
+           CASE priority WHEN 'high' THEN 1 WHEN 'med' THEN 2 ELSE 3 END,
+           created_at DESC
+         LIMIT $2 OFFSET $3`,
+        [req.userId, limit, offset, status]
+      );
+    }
     return { tasks: res.rows, total: res.rows.length };
   });
 

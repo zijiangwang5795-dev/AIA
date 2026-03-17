@@ -179,14 +179,23 @@ async function executeTool(name, args, context = {}) {
     }
 
     case 'get_tasks': {
-      const status = args.status || 'pending';
-      const limit = args.limit || 20;
-      const statusFilter = status === 'all' ? `status IN ('pending','done')` : `status='${status}'`;
-      const res = await query(
-        `SELECT * FROM tasks WHERE user_id=$1 AND ${statusFilter}
-         ORDER BY created_at DESC LIMIT $2`,
-        [userId, limit]
-      );
+      const validStatuses = new Set(['pending', 'done', 'all']);
+      const status = validStatuses.has(args.status) ? args.status : 'pending';
+      const limit = Math.min(Math.max(1, parseInt(args.limit) || 20), 100);
+      let res;
+      if (status === 'all') {
+        res = await query(
+          `SELECT * FROM tasks WHERE user_id=$1 AND status IN ('pending','done')
+           ORDER BY created_at DESC LIMIT $2`,
+          [userId, limit]
+        );
+      } else {
+        res = await query(
+          `SELECT * FROM tasks WHERE user_id=$1 AND status=$3
+           ORDER BY created_at DESC LIMIT $2`,
+          [userId, limit, status]
+        );
+      }
       return { tasks: res.rows, count: res.rows.length };
     }
 

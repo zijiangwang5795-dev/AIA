@@ -266,6 +266,32 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS assistant_emoji VARCHAR(10)  DEFAULT 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_model VARCHAR(50);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_searchable   BOOLEAN      DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login      TIMESTAMPTZ;
+
+-- ── 商业化增量迁移 ────────────────────────────────────
+-- Stripe Customer ID（与 Stripe 账户关联，避免重复创建 Customer）
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(50);
+-- Stripe Price ID（plans 表：每个计划对应 Stripe 中的 Price 对象）
+ALTER TABLE plans ADD COLUMN IF NOT EXISTS stripe_price_id VARCHAR(50);
+
+-- ── 补充性能索引 ─────────────────────────────────────
+-- refresh_tokens：按 expires_at 加速过期清理；id 已是 PK 无需重复
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_exp ON refresh_tokens(user_id, expires_at);
+
+-- skills：按 user_id 加速查询
+CREATE INDEX IF NOT EXISTS idx_skills_user ON skills(user_id, is_builtin);
+
+-- users：is_searchable 过滤（用户搜索场景）
+CREATE INDEX IF NOT EXISTS idx_users_searchable ON users(is_searchable, display_name);
+
+-- users：stripe_customer_id 查找
+CREATE INDEX IF NOT EXISTS idx_users_stripe ON users(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
+
+-- user_subscriptions：external_subscription_id（Webhook 回调按此字段更新）
+CREATE INDEX IF NOT EXISTS idx_subscriptions_ext ON user_subscriptions(external_subscription_id)
+  WHERE external_subscription_id IS NOT NULL;
+
+-- messages：sender_type 过滤（查询助手代发消息）
+CREATE INDEX IF NOT EXISTS idx_messages_sender_type ON messages(to_user_id, sender_type, created_at DESC);
 `;
 
 async function migrate() {
