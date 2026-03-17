@@ -5,6 +5,10 @@ const { v4: uuid } = require('uuid');
 const axios = require('axios');
 const { syncAgentConfig } = require('../brain/openclaw/client');
 const { buildStaticPersona } = require('../personality/assembler');
+const { sendSMS } = require('../services/sms');
+
+// 手机号格式校验（支持 +86 前缀或纯 11 位数字）
+const PHONE_RE = /^(\+?86)?1[3-9]\d{9}$|^\+[1-9]\d{6,14}$/;
 
 // 微信 OAuth state 临时存储（10 分钟 TTL）
 const WECHAT_STATES = new Map();
@@ -12,15 +16,30 @@ const WECHAT_STATES = new Map();
 module.exports = async function authRoutes(app) {
 
   // ── 发送 OTP ──────────────────────────────────────
-  app.post('/otp/send', async (req, reply) => {
-    const { phone } = req.body || {};
-    if (!phone) return reply.code(400).send({ error: 'phone required' });
+  // 每个 IP 每 10 分钟最多发 5 次，防止短信轰炸
+  app.post('/otp/send', {
+    config: { rateLimit: { max: 5, timeWindow: '10 minutes', keyGenerator: (req) => `otp:${req.ip}` } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['phone'],
+        properties: { phone: { type: 'string', minLength: 8, maxLength: 20 } },
+      },
+    },
+  }, async (req, reply) => {
+    const { phone } = req.body;
 
-    const code = process.env.DEMO_MODE === 'true'
+    // 手机号格式校验
+    if (!PHONE_RE.test(phone.replace(/\s/g, ''))) {
+      return reply.code(400).send({ error: '手机号格式不正确' });
+    }
+
+    const isDemo = process.env.DEMO_MODE === 'true';
+    const code = isDemo
       ? (process.env.DEMO_OTP || '123456')
       : Math.floor(100000 + Math.random() * 900000).toString();
 
-    const expiresAt = new Date(Date.now() + 60000); // 60秒
+    const expiresAt = new Date(Date.now() + 60000); // 60 秒
     await query(
       `INSERT INTO otp_codes (phone, code, expires_at)
        VALUES ($1, $2, $3)
@@ -28,17 +47,38 @@ module.exports = async function authRoutes(app) {
       [phone, code, expiresAt]
     );
 
-    // 生产环境：在这里接入短信服务（阿里云/腾讯云）
-    if (process.env.DEMO_MODE === 'true') {
-      console.log(`📱 OTP for ${phone}: ${code}`);
+    // 发送短信（Demo 模式跳过，生产模式调用真实 SMS 服务）
+    if (!isDemo) {
+      await sendSMS(phone, code);
+    } else {
+      // Demo 模式：仅通过结构化日志记录，不在响应中暴露 code
+      app.log.info({ phone: phone.slice(0, 4) + '****' + phone.slice(-2) }, '[Auth] Demo OTP generated');
     }
 
-    return { success: true, expiresIn: 60, demo: process.env.DEMO_MODE === 'true' };
+    return {
+      success: true,
+      expiresIn: 60,
+      // Demo 模式在响应中明示 code，方便测试；生产绝不返回
+      ...(isDemo ? { demo: true, code } : {}),
+    };
   });
 
   // ── 验证 OTP ──────────────────────────────────────
-  app.post('/otp/verify', async (req, reply) => {
-    const { phone, code } = req.body || {};
+  // 每个 IP 每 10 分钟最多尝试 10 次，防止暴力枚举
+  app.post('/otp/verify', {
+    config: { rateLimit: { max: 10, timeWindow: '10 minutes', keyGenerator: (req) => `verify:${req.ip}` } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['phone', 'code'],
+        properties: {
+          phone: { type: 'string', minLength: 8, maxLength: 20 },
+          code:  { type: 'string', minLength: 6, maxLength: 6, pattern: '^[0-9]{6}$' },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const { phone, code } = req.body;
     if (!phone || !code) return reply.code(400).send({ error: 'phone and code required' });
 
     const result = await query(
@@ -68,16 +108,19 @@ module.exports = async function authRoutes(app) {
     // 更新最后登录
     await query(`UPDATE users SET last_login=NOW() WHERE id=$1`, [user.id]);
 
-    // 签发 Token
+    // 签发 Token（格式：accessToken = JWT；refreshToken = {uuid}.{secret}）
     const accessToken = app.jwt.sign({ sub: user.id, phone }, { expiresIn: '2h' });
-    const refreshToken = uuid();
-    const refreshHash = await bcrypt.hash(refreshToken, 8);
+    const secret = uuid();
+    const refreshHash = await bcrypt.hash(secret, 8);
 
-    await query(
+    const tokenRes = await query(
       `INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
-       VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+       VALUES ($1, $2, NOW() + INTERVAL '30 days') RETURNING id`,
       [user.id, refreshHash]
     );
+    const tokenId = tokenRes.rows[0].id;
+    // tokenId.secret 格式支持 O(1) 查找，同时保留 bcrypt 校验安全性
+    const refreshToken = `${tokenId}.${secret}`;
 
     // 清理 OTP
     await query(`DELETE FROM otp_codes WHERE phone=$1`, [phone]);
@@ -111,19 +154,45 @@ module.exports = async function authRoutes(app) {
   });
 
   // ── 刷新 Token ────────────────────────────────────
-  app.post('/refresh', async (req, reply) => {
-    const { refreshToken } = req.body || {};
-    if (!refreshToken) return reply.code(400).send({ error: 'refreshToken required' });
+  // 格式：`{tokenId}.{secret}`
+  // tokenId 用于 O(1) DB 查找，secret 再 bcrypt 校验
+  app.post('/refresh', {
+    config: { rateLimit: { max: 20, timeWindow: '10 minutes', keyGenerator: (req) => `refresh:${req.ip}` } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['refreshToken'],
+        properties: { refreshToken: { type: 'string', minLength: 10 } },
+      },
+    },
+  }, async (req, reply) => {
+    const { refreshToken } = req.body;
 
-    const tokens = await query(
-      `SELECT * FROM refresh_tokens WHERE expires_at > NOW()`,
-      []
-    );
+    // 拆分 tokenId.secret（向下兼容旧格式纯 UUID）
+    const dotIdx = refreshToken.indexOf('.');
+    const tokenId = dotIdx > 0 ? refreshToken.slice(0, dotIdx) : null;
+    const secret  = dotIdx > 0 ? refreshToken.slice(dotIdx + 1) : refreshToken;
 
-    // 遍历验证（生产环境应换成更高效的方式）
+    let rows;
+    if (tokenId) {
+      // 新格式：直接按 token_id 查找，O(1)
+      const res = await query(
+        `SELECT * FROM refresh_tokens WHERE id=$1 AND expires_at > NOW()`,
+        [tokenId]
+      );
+      rows = res.rows;
+    } else {
+      // 旧格式兼容：按 user_id 无法定位，仍需扫描（但数量极少因有过期清理）
+      const res = await query(
+        `SELECT * FROM refresh_tokens WHERE expires_at > NOW() LIMIT 500`,
+        []
+      );
+      rows = res.rows;
+    }
+
     let matched = null;
-    for (const row of tokens.rows) {
-      if (await bcrypt.compare(refreshToken, row.token_hash)) {
+    for (const row of rows) {
+      if (await bcrypt.compare(secret, row.token_hash)) {
         matched = row;
         break;
       }
@@ -131,8 +200,23 @@ module.exports = async function authRoutes(app) {
 
     if (!matched) return reply.code(401).send({ error: 'Invalid or expired refresh token' });
 
-    const accessToken = app.jwt.sign({ sub: matched.user_id }, { expiresIn: '2h' });
-    return { accessToken };
+    // 签发新 access token
+    const userRes = await query(`SELECT id, phone FROM users WHERE id=$1`, [matched.user_id]);
+    const user = userRes.rows[0];
+    if (!user) return reply.code(401).send({ error: 'User not found' });
+
+    const accessToken = app.jwt.sign({ sub: user.id, phone: user.phone }, { expiresIn: '2h' });
+
+    // 轮换 refresh token（Refresh Token Rotation）
+    const newSecret = uuid();
+    const newHash = await bcrypt.hash(newSecret, 8);
+    await query(
+      `UPDATE refresh_tokens SET token_hash=$1, expires_at=NOW() + INTERVAL '30 days' WHERE id=$2`,
+      [newHash, matched.id]
+    );
+    const newRefreshToken = `${matched.id}.${newSecret}`;
+
+    return { accessToken, refreshToken: newRefreshToken };
   });
 
   // ── 获取当前用户 ──────────────────────────────────

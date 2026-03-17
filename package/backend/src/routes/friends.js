@@ -1,5 +1,6 @@
 'use strict';
 const { query } = require('../db/client');
+const { sendPushToUser } = require('../services/push');
 
 module.exports = async function friendsRoutes(app) {
 
@@ -286,13 +287,11 @@ module.exports = async function friendsRoutes(app) {
     );
 
     // 推送通知给对方（fire and forget）
-    query(`SELECT token FROM push_tokens WHERE user_id=$1 LIMIT 5`, [toUserId])
-      .then(tokRes => {
-        if (tokRes.rows.length) {
-          // TODO: 接入真实 FCM Admin SDK
-          app.log.info(`[Push] Message from ${sender?.display_name} → user ${toUserId}`);
-        }
-      }).catch(() => {});
+    sendPushToUser(toUserId, {
+      title: `${sender?.assistant_emoji || '🤖'} ${sender?.assistant_name || sender?.display_name || '好友'} 发来消息`,
+      body:  content.slice(0, 100),
+      data:  { type: 'friend_message', fromUserId: String(req.user.sub) },
+    }).catch(() => {});
 
     return res.rows[0];
   });
