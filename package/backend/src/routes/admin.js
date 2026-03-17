@@ -7,11 +7,25 @@ function maskKey(key) {
   return key.slice(0, 4) + '****' + key.slice(-4);
 }
 
+// 管理员 UUID 列表，逗号分隔，来自环境变量
+// 例：ADMIN_USER_IDS=uuid1,uuid2
+const _adminIds = new Set(
+  (process.env.ADMIN_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
+);
+
 module.exports = async function adminRoutes(app) {
 
+  // 1. 验证 JWT；2. 检查 ADMIN_USER_IDS 白名单
   const auth = async (req, reply) => {
-    try { await req.jwtVerify(); }
-    catch { reply.code(401).send({ error: 'Unauthorized' }); }
+    try {
+      await req.jwtVerify();
+    } catch {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    // ADMIN_USER_IDS 未配置时拒绝所有人（fail-safe）
+    if (!_adminIds.size || !_adminIds.has(req.user.sub)) {
+      return reply.code(403).send({ error: 'Forbidden: admin access required' });
+    }
   };
 
   // ── GET /admin/config — 读取当前运行时配置（Key 已掩码）

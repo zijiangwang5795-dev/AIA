@@ -543,14 +543,31 @@ getOpenClawConfig()       // 返回 { url, token, defaultModel, embedModel }
 | `pro` | ¥68/月 | 2000 | 20 |
 | `enterprise` | ¥688/月 | 无限 | 无限 |
 
-| 接口 | 说明 |
-|---|---|
-| `GET /plans` | 所有可用套餐（按价格升序）|
-| `GET /subscription` | 当前订阅状态 + 本月用量（含百分比）|
-| `GET /subscription/usage-detail` | 近6个月用量历史 |
-| `POST /subscription/upgrade` | 升级套餐（Mock 支付，直接激活；返回 OpenClaw 配置引导）|
-| `POST /subscription/cancel` | 取消订阅（当期继续有效）|
-| `POST /webhook/payment` | 支付回调（生产需接入 Stripe/微信支付）|
+| 接口 | 限速 | 说明 |
+|---|---|---|
+| `GET /plans` | — | 所有可用套餐（按价格升序，无需鉴权）|
+| `GET /subscription` | — | 当前订阅状态 + 本月用量（含百分比）|
+| `GET /subscription/usage-detail` | — | 近6个月用量历史 |
+| `POST /subscription/upgrade` | 10次/10min/用户 | 升级套餐；配置了 Stripe 时返回 checkoutUrl，否则演示直接激活 |
+| `POST /subscription/cancel` | 5次/小时/用户 | 取消订阅（当期继续有效，Stripe 侧设 cancel_at_period_end）|
+| `POST /webhook/payment` | — | 支付回调（详见 Webhook 安全）|
+
+**Stripe 集成流程：**
+
+```
+1. 在 plans 表配置 stripe_price_id（对应 Stripe Dashboard 中的 Price ID）
+2. 用户升级 → 后端创建/复用 Stripe Customer，创建 Checkout Session
+3. 用户完成支付 → Stripe 回调 /webhook/payment（checkout.session.completed）
+4. 续费：invoice.payment_succeeded 事件更新 period_end
+5. 付款失败：invoice.payment_failed 标记 past_due
+6. 退款：charge.refunded 取消订阅
+7. 手动取消：customer.subscription.deleted 标记 expired
+```
+
+**Webhook 安全：**
+
+- Stripe Webhook：使用 `STRIPE_WEBHOOK_SECRET` 验证 `stripe-signature` 头（`webhooks.constructEvent`）
+- 非 Stripe（微信/支付宝）：使用 `PAYMENT_WEBHOOK_SECRET` HMAC-SHA256 验证 `X-Payment-Signature` 头（`sha256=<hex>` 格式），未配置时拒绝所有通用回调
 
 ---
 
@@ -578,6 +595,12 @@ getOpenClawConfig()       // 返回 { url, token, defaultModel, embedModel }
 
 > API Key 特殊处理：空字符串 = 不改动；`__clear__` = 清空。
 
+**鉴权（双重）：**
+1. 有效 JWT（`req.jwtVerify()`）
+2. JWT 中的 `sub`（用户 UUID）必须在 `ADMIN_USER_IDS` 环境变量白名单中
+
+`ADMIN_USER_IDS` 未配置时，所有请求均返回 403（fail-safe）。
+
 ---
 
 #### `src/routes/feedback.js`（用户反馈）
@@ -591,11 +614,15 @@ getOpenClawConfig()       // 返回 { url, token, defaultModel, embedModel }
 
 #### `src/routes/push.js`（推送通知）
 
-| 接口 | 说明 |
-|---|---|
-| `POST /push/register` | 注册设备推送 Token（FCM）|
-| `DELETE /push/token` | 注销 Token（登出时调用）|
-| `POST /push/send` | 发送推送（内部接口；TODO: 接入 Firebase Admin SDK）|
+| 接口 | 鉴权 | 说明 |
+|---|---|---|
+| `POST /push/register` | JWT | 注册设备推送 Token（FCM/APNs）|
+| `DELETE /push/token` | JWT | 注销 Token（登出时调用）|
+| `POST /push/send` | `X-Internal-Secret` | 内部服务专用（需配置 `INTERNAL_API_SECRET`）|
+
+> `POST /push/send` 不使用用户 JWT，改用 `INTERNAL_API_SECRET` 头保护，仅限后端任务使用。
+>
+> `services/push.js` 封装了实际的 FCM 推送逻辑（Firebase Admin SDK），可直接调用，无需经过 HTTP。
 
 ---
 
@@ -1204,7 +1231,7 @@ push_tokens     -- FCM/APNs 设备 Token
 PORT=3000
 HOST=0.0.0.0
 NODE_ENV=development
-JWT_SECRET=<长随机字符串>
+JWT_SECRET=<长随机字符串，生产用 openssl rand -hex 32>
 JWT_EXPIRE=2h
 REFRESH_EXPIRE=30d
 
@@ -1236,8 +1263,32 @@ APPLE_TEAM_ID=
 APPLE_KEY_ID=
 GOOGLE_CLIENT_ID=
 
+# ── 短信 OTP ────────────────────────────────
+ALIYUN_SMS_KEY=
+ALIYUN_SMS_SECRET=
+ALIYUN_SMS_SIGN=
+ALIYUN_SMS_TEMPLATE=
+# 或 Twilio：
+TWILIO_SID=
+TWILIO_TOKEN=
+TWILIO_FROM=
+
+# ── 支付 ────────────────────────────────────
+STRIPE_SECRET_KEY=sk_test_...           # 测试 sk_test_，生产 sk_live_
+STRIPE_WEBHOOK_SECRET=whsec_...        # Stripe Dashboard → Webhooks → 签名密钥
+PAYMENT_WEBHOOK_SECRET=<hex>           # 微信/支付宝 Webhook HMAC 密钥（openssl rand -hex 32）
+
+# ── 推送通知 ────────────────────────────────
+FIREBASE_CREDENTIALS=<JSON 单行>       # Firebase Admin SDK 服务账号 JSON
+
+# ── 安全 ─────────────────────────────────────
+ALLOWED_ORIGINS=https://app.example.com # 生产 CORS 白名单，逗号分隔
+ADMIN_USER_IDS=<uuid1>,<uuid2>          # 可访问 /admin/* 的用户 UUID，空则全员禁止
+INTERNAL_API_SECRET=<hex>              # /push/send 内部端点密钥（openssl rand -hex 32）
+APP_URL=https://your-domain.com        # Stripe 回调基础地址
+
 # ── 演示模式 ────────────────────────────────
-DEMO_MODE=true                          # true 时跳过真实 SMS，允许任意 OTP
+DEMO_MODE=true                          # 生产必须设为 false
 DEMO_OTP=123456
 ```
 
@@ -1248,38 +1299,54 @@ DEMO_OTP=123456
 ### 已实现
 
 - ✅ JWT 短期有效（2h）+ 长期 refreshToken（哈希存储，不存明文）
+- ✅ Refresh Token Rotation：每次刷新签发新 secret，旧 secret 失效
+- ✅ Refresh Token 查找 O(1)：格式 `{tokenId}.{secret}`，按 PK 直接查找，不再全表 bcrypt 扫描
 - ✅ OTP 60 秒过期，同手机号 upsert（无历史堆积）
-- ✅ 全局限速：100 次/分钟
-- ✅ SQL 参数化查询（防注入）
+- ✅ 全局限速（200次/分钟）+ 敏感端点独立限速（otp/send 5次/10min，refresh 20次/10min 等）
+- ✅ SQL 白名单校验 + 参数化查询（消除 status/limit 注入风险）
 - ✅ Zod 工具参数校验
 - ✅ 计算器表达式安全过滤（`replace(/[^0-9+\-*/().%\s]/g, '')`）
 - ✅ 微信 OAuth state 校验（防 CSRF）
+- ✅ Stripe Webhook HMAC 签名验证（`webhooks.constructEvent` 使用原始 buffer）
+- ✅ 非 Stripe Webhook HMAC-SHA256 签名验证（`X-Payment-Signature` 头，timingSafeEqual）
+- ✅ `invoice.payment_failed` 处理（标记 past_due，保留宽限期访问）
+- ✅ `charge.refunded` 处理（取消订阅）
+- ✅ `customer.subscription.updated` 处理（续费更新 period_end）
+- ✅ 管理员接口 RBAC（JWT + `ADMIN_USER_IDS` 白名单，未配置时 fail-safe 全员拒绝）
+- ✅ `/push/send` 改为 `INTERNAL_API_SECRET` 保护，移除 JWT 用户可访问路径
 - ✅ API Key 管理端掩码显示
 - ✅ Android JWT 存入 `SharedPreferences`（`MODE_PRIVATE`，不可备份）
+- ✅ 数据库关键索引（tasks, friendships, messages, refresh_tokens, skills, monthly_usage, subscriptions）
 
 ### 生产部署前必须完成
 
 | 项 | 当前状态 | 要求 |
 |---|---|---|
-| CORS | `origin: true` | 收窄为具体域名 |
-| OTP 频率限制 | 无 | 同手机号 60 秒内最多 1 次发送 |
+| CORS | `origin: true` | 设置 `ALLOWED_ORIGINS`，收窄为具体域名 |
+| JWT_SECRET | 有默认 fallback | 必须设置为 256 位随机值，无 fallback |
+| ADMIN_USER_IDS | 空值 = 全员禁止 | 填写管理员 UUID |
+| INTERNAL_API_SECRET | 默认占位值 | 必须设置随机值 |
+| PAYMENT_WEBHOOK_SECRET | 默认占位值 | 接入微信/支付宝时必须设置 |
+| DEMO_MODE | 默认 `true` | 生产设为 `false` |
+| OTP 同手机号频率限制 | 无 | 同手机号 60 秒内最多 1 次发送 |
 | OTP 错误次数 | 无 | 失败 5 次后锁定 |
-| HTTPS | 未强制 | 生产必须全站 HTTPS |
-| 支付 Webhook 验签 | Mock 无验签 | 接入 Stripe/微信支付时必须验证签名 |
+| HTTPS | 未强制 | 生产必须全站 HTTPS（建议 Nginx TLS 终止）|
 | 微信 OAuth 域名 | 需在公众号后台配置 | 配置网页授权回调域名 |
 | 敏感字段加密 | 手机号明文 | 生产建议加密存储 |
 | GDPR | 无 | 需提供数据导出和删除接口 |
 | 内容审核 | 无 | soul_prompt 需过滤违规内容 |
-| 管理员鉴权 | 仅 JWT | 需要更严格的管理员角色控制 |
+| 响应安全头 | 无 Helmet | 添加 HSTS、X-Content-Type-Options、X-Frame-Options、CSP |
+| bcrypt cost | 8（低于 OWASP 推荐 12）| 提升至 12 |
 
 ### 待实现功能（TODO）
 
 | 功能 | 现状 | 计划 |
 |---|---|---|
-| 联网搜索 | 演示模式返回假数据 | 接入 Tavily / Serper |
-| 真实支付 | Mock 直接激活 | Stripe / 微信支付 / 支付宝 |
-| 推送通知 | Token 已注册，不真正发送 | Firebase Admin SDK |
+| 真实支付 | Stripe Checkout 已接，Mock 模式仍可跳过 | 在 plans 表填写 stripe_price_id，配置 STRIPE_SECRET_KEY |
 | Apple/Google OAuth | 前端占位，无后端实现 | 完整 OAuth 流程 |
 | 邮箱登录/OTP | 未实现 | 作为手机的备选 |
+| OTP 短信真实发送 | Demo 模式打印 log | 配置 ALIYUN_SMS_KEY 或 TWILIO_SID |
 | 管理后台 | 仅 `/admin/config` | 用户管理、数据分析 |
 | 离线同步 | 无 | 本地队列 → 联网后同步 |
+| 数据库事务 | 无 | 关键操作（扣配额+写日志）需加事务 |
+| 迁移回滚 | 仅 UP 迁移 | 添加 DOWN 迁移脚本 |

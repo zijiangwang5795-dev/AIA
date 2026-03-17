@@ -52,28 +52,34 @@ module.exports = async function pushRoutes(app) {
     return { success: true };
   });
 
-  // ── 发送推送通知（内部接口，供后端服务调用）──────
-  // 仅限已登录用户（避免滥用）；实际触发由 tool/registry.js 等内部逻辑驱动
+  // ── 发送推送通知（内部服务密钥保护，不对外暴露）──────
+  // 仅供同主机后端服务调用，需在请求头携带 INTERNAL_API_SECRET
+  // 推送逻辑主要通过 services/push.js 直接调用，此 HTTP 端点供集成测试 & 后台任务使用
   app.post('/push/send', {
-    preHandler: [requireAuth],
     schema: {
       body: {
         type: 'object',
         required: ['targetUserId', 'title'],
         properties: {
-          targetUserId: { type: 'string' },
-          title:        { type: 'string', maxLength: 256 },
+          targetUserId: { type: 'string', minLength: 1, maxLength: 64 },
+          title:        { type: 'string', minLength: 1, maxLength: 256 },
           body:         { type: 'string', maxLength: 1024 },
           data:         { type: 'object' },
         },
       },
     },
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
   }, async (req, reply) => {
+    // 内部服务密钥校验（INTERNAL_API_SECRET 未配置时拒绝所有请求）
+    const secret = process.env.INTERNAL_API_SECRET;
+    if (!secret) return reply.code(503).send({ error: 'Push send not available: INTERNAL_API_SECRET not configured' });
+    if (req.headers['x-internal-secret'] !== secret) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+
     const { targetUserId, title, body = '', data = {} } = req.body;
-
     const result = await sendPushToUser(targetUserId, { title, body, data });
-    app.log.info({ targetUserId, title, ...result }, '[Push] sendPushToUser result');
-
+    app.log.info({ targetUserId, title, sent: result.sent, failed: result.failed }, '[Push] sendPushToUser result');
     return result;
   });
 };

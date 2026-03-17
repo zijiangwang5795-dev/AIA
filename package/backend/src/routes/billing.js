@@ -1,8 +1,21 @@
 'use strict';
+const crypto = require('crypto');
 const { query } = require('../db/client');
 const { authMiddleware: requireAuth } = require('../auth/middleware');
 const { getUserPlan, getMonthlyUsage } = require('../middleware/quota');
 const { resolveUserConfig } = require('../brain/openclaw/client');
+
+// HMAC-SHA256 时间安全比较（防止计时攻击）
+function verifyHmacSignature(rawBody, signature, secret) {
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+  // 签名格式可能带 "sha256=" 前缀
+  const received = signature.startsWith('sha256=') ? signature.slice(7) : signature;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received));
+  } catch {
+    return false;
+  }
+}
 
 // ── Stripe 初始化（仅在配置了 key 时启用）────────────
 let stripe = null;
@@ -77,15 +90,16 @@ module.exports = async function billingRoutes(app) {
   // 未配置 Stripe 时降级为 Mock（方便开发/演示）
   app.post('/subscription/upgrade', {
     preHandler: [requireAuth],
+    config: { rateLimit: { max: 10, timeWindow: '10 minutes', keyGenerator: (req) => `upgrade:${req.userId}` } },
     schema: {
       body: {
         type: 'object',
         required: ['planId'],
         properties: {
-          planId:        { type: 'string' },
-          paymentMethod: { type: 'string' },
-          successUrl:    { type: 'string' },
-          cancelUrl:     { type: 'string' },
+          planId:        { type: 'string', maxLength: 20 },
+          paymentMethod: { type: 'string', enum: ['stripe', 'wechat', 'alipay'], default: 'stripe' },
+          successUrl:    { type: 'string', maxLength: 512 },
+          cancelUrl:     { type: 'string', maxLength: 512 },
         },
       },
     },
@@ -174,6 +188,7 @@ module.exports = async function billingRoutes(app) {
   // ── 取消订阅 ──────────────────────────────────────
   app.post('/subscription/cancel', {
     preHandler: [requireAuth],
+    config: { rateLimit: { max: 5, timeWindow: '1 hour', keyGenerator: (req) => `cancel:${req.userId}` } },
   }, async (req, reply) => {
     const userId = req.userId;
 
@@ -186,7 +201,9 @@ module.exports = async function billingRoutes(app) {
 
     const stripeClient = getStripe();
     if (stripeClient && extId) {
-      await stripeClient.subscriptions.update(extId, { cancel_at_period_end: true }).catch(() => {});
+      await stripeClient.subscriptions.update(extId, { cancel_at_period_end: true }).catch(err => {
+        app.log.error({ err: err.message, extId }, '[Billing] Stripe cancel_at_period_end failed');
+      });
     }
 
     await query(
@@ -294,10 +311,79 @@ module.exports = async function billingRoutes(app) {
         break;
       }
 
-      // 通用回调（非 Stripe，如微信支付宝等）
+      // ── 续费成功（Stripe 订阅自动续费）──────────────
+      case 'customer.subscription.updated': {
+        const sub = event.data?.object;
+        if (sub?.id && sub?.current_period_end) {
+          const periodEnd = new Date(sub.current_period_end * 1000);
+          await query(
+            `UPDATE user_subscriptions SET status='active', period_end=$1 WHERE external_subscription_id=$2`,
+            [periodEnd.toISOString(), sub.id]
+          );
+          app.log.info({ subId: sub.id }, '[Webhook] Subscription updated');
+        }
+        break;
+      }
+
+      // ── 付款失败（扣费失败，标记欠费）────────────────
+      case 'invoice.payment_failed': {
+        const invoice = event.data?.object;
+        const subId = invoice?.subscription;
+        if (subId) {
+          // 标记 past_due，但保留访问权（宽限期内）
+          await query(
+            `UPDATE user_subscriptions SET status='past_due' WHERE external_subscription_id=$1 AND status='active'`,
+            [subId]
+          );
+          app.log.warn({ subId, invoiceId: invoice.id }, '[Webhook] Payment failed, subscription marked past_due');
+        }
+        break;
+      }
+
+      // ── 退款（标记订阅到期/取消）─────────────────────
+      case 'charge.refunded': {
+        const charge = event.data?.object;
+        const customerId = charge?.customer;
+        if (customerId) {
+          // 查出对应用户并撤销订阅
+          const userRes = await query('SELECT id FROM users WHERE stripe_customer_id=$1', [customerId]);
+          const uid = userRes.rows[0]?.id;
+          if (uid) {
+            await query(
+              `UPDATE user_subscriptions SET status='cancelled' WHERE user_id=$1 AND status IN ('active','past_due')`,
+              [uid]
+            );
+            app.log.info({ customerId, uid }, '[Webhook] Refund processed, subscription cancelled');
+          }
+        }
+        break;
+      }
+
+      // ── 通用回调（非 Stripe，如微信支付宝等）──────────
+      // 必须配置 PAYMENT_WEBHOOK_SECRET 并携带 X-Payment-Signature 头
       case undefined: {
+        const webhookSecret = process.env.PAYMENT_WEBHOOK_SECRET;
+        if (!webhookSecret) {
+          app.log.warn('[Webhook] Generic webhook received but PAYMENT_WEBHOOK_SECRET not configured, rejecting');
+          return reply.code(403).send({ error: 'Generic webhook not configured' });
+        }
+        const sig = req.headers['x-payment-signature'];
+        if (!sig) {
+          return reply.code(400).send({ error: 'Missing X-Payment-Signature header' });
+        }
+        const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
+        if (!verifyHmacSignature(rawBody, sig, webhookSecret)) {
+          app.log.warn('[Webhook] Generic webhook HMAC verification failed');
+          return reply.code(400).send({ error: 'Invalid webhook signature' });
+        }
+
         const { event: evtType, userId, planId, externalId } = req.body || {};
         if (evtType === 'payment.success' && userId && planId) {
+          // 验证 userId/planId 存在，防止伪造
+          const planCheck = await query('SELECT id FROM plans WHERE id=$1 AND is_active=TRUE', [planId]);
+          if (!planCheck.rows.length) {
+            return reply.code(400).send({ error: 'Invalid planId' });
+          }
           const periodEnd = new Date();
           periodEnd.setMonth(periodEnd.getMonth() + 1);
           await query(`
@@ -309,6 +395,7 @@ module.exports = async function billingRoutes(app) {
               period_end = EXCLUDED.period_end,
               external_subscription_id = EXCLUDED.external_subscription_id
           `, [userId, planId, periodEnd.toISOString(), externalId || null]);
+          app.log.info({ userId, planId }, '[Webhook] Generic payment.success processed');
         }
         break;
       }
