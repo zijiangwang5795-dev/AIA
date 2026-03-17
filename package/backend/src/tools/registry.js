@@ -1,6 +1,7 @@
 'use strict';
 const { query } = require('../db/client');
 const { v4: uuid } = require('uuid');
+const { sendPushToUser } = require('../services/push');
 
 // ── 工具定义（OpenAI Function Calling 格式）────────────
 const TOOL_DEFINITIONS = {
@@ -256,15 +257,11 @@ async function executeTool(name, args, context = {}) {
         [userId, friend.id, message, `${assistantEmoji} ${assistantName}`]
       );
 
-      // 推送通知给好友（fire and forget）
-      query(
-        `SELECT token FROM push_tokens WHERE user_id=$1 LIMIT 5`,
-        [friend.id]
-      ).then(tokRes => {
-        if (tokRes.rows.length) {
-          // TODO: 接入真实 FCM，此处记录日志
-          console.log(`[Push] ${assistantEmoji}${assistantName} → ${friend.display_name}: ${message.slice(0, 40)}`);
-        }
+      // 推送通知给好友（fire and forget，不阻塞响应）
+      sendPushToUser(friend.id, {
+        title: `${assistantEmoji} ${assistantName} 发来消息`,
+        body:  message.slice(0, 100),
+        data:  { type: 'friend_message', fromUserId: userId },
       }).catch(() => {});
 
       return {

@@ -1701,48 +1701,126 @@ function getApiBase() {
   return 'http://localhost:3000';
 }
 
+// ── HTML 转义（XSS 防护）──────────────────────────────
+// 所有将用户数据插入 innerHTML 的地方必须经过 esc() 处理
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── Token 管理 ─────────────────────────────────────────
 const Auth = {
-  token: localStorage.getItem('ai_token') || null,
-  userId: localStorage.getItem('ai_uid') || null,
-  user: JSON.parse(localStorage.getItem('ai_user') || 'null'),
+  token:     localStorage.getItem('ai_token') || null,
+  userId:    localStorage.getItem('ai_uid') || null,
+  user:      JSON.parse(localStorage.getItem('ai_user') || 'null'),
+  expiresAt: parseInt(localStorage.getItem('ai_token_exp') || '0', 10),
+  _refreshTimer: null,
 
   save(accessToken, user) {
-    this.token = accessToken;
+    this.token  = accessToken;
     this.userId = user?.id;
-    this.user = user;
+    this.user   = user;
+    // JWT payload 中解析过期时间（标准 exp 字段，单位秒）
+    try {
+      const payload = JSON.parse(atob(accessToken.split('.')[1]));
+      this.expiresAt = (payload.exp || 0) * 1000;
+      localStorage.setItem('ai_token_exp', String(this.expiresAt));
+    } catch { this.expiresAt = 0; }
     localStorage.setItem('ai_token', accessToken);
     localStorage.setItem('ai_uid', user?.id || '');
     localStorage.setItem('ai_user', JSON.stringify(user));
+    this._scheduleRefresh();
   },
 
   clear() {
-    this.token = null; this.userId = null; this.user = null;
-    localStorage.removeItem('ai_token');
-    localStorage.removeItem('ai_uid');
-    localStorage.removeItem('ai_user');
+    this.token = null; this.userId = null; this.user = null; this.expiresAt = 0;
+    if (this._refreshTimer) { clearTimeout(this._refreshTimer); this._refreshTimer = null; }
+    ['ai_token', 'ai_uid', 'ai_user', 'ai_token_exp', 'ai_refresh'].forEach(k => localStorage.removeItem(k));
   },
 
   headers() {
     return this.token
       ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` }
       : { 'Content-Type': 'application/json' };
-  }
+  },
+
+  // 提前 5 分钟刷新，确保 token 持续有效
+  _scheduleRefresh() {
+    if (this._refreshTimer) clearTimeout(this._refreshTimer);
+    if (!this.expiresAt) return;
+    const delay = this.expiresAt - Date.now() - 5 * 60 * 1000; // 到期前 5min
+    if (delay < 0) { this._doRefresh(); return; }
+    this._refreshTimer = setTimeout(() => this._doRefresh(), Math.max(delay, 10000));
+  },
+
+  async _doRefresh() {
+    const refreshToken = localStorage.getItem('ai_refresh');
+    if (!refreshToken) return;
+    try {
+      const resp = await fetch(`${getApiBase()}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!resp.ok) { this.clear(); return; }
+      const data = await resp.json();
+      if (data.accessToken) {
+        this.save(data.accessToken, data.user || this.user);
+        if (data.refreshToken) localStorage.setItem('ai_refresh', data.refreshToken);
+      }
+    } catch { /* 静默失败，下次请求 401 时再处理 */ }
+  },
 };
 
-// ── 通用 API 调用 ──────────────────────────────────────
-async function apiCall(method, path, body) {
-  const resp = await fetch(`${getApiBase()}${path}`, {
-    method,
-    headers: Auth.headers(),
-    body: body ? JSON.stringify(body) : undefined,
-  });
+// 页面加载时调度已有 token 的刷新
+if (Auth.token && Auth.expiresAt) Auth._scheduleRefresh();
+
+// ── 通用 API 调用（带 401 自动刷新 + 网络重试）────────
+async function apiCall(method, path, body, _retry = 0) {
+  let resp;
+  try {
+    resp = await fetch(`${getApiBase()}${path}`, {
+      method,
+      headers: Auth.headers(),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (networkErr) {
+    // 网络错误最多重试 2 次（指数退避）
+    if (_retry < 2) {
+      await new Promise(r => setTimeout(r, (2 ** _retry) * 1000));
+      return apiCall(method, path, body, _retry + 1);
+    }
+    throw new Error('网络连接失败，请检查网络后重试');
+  }
+
   if (resp.status === 204) return {};
-  const data = await resp.json();
+
+  const data = await resp.json().catch(() => ({}));
+
+  // 配额超限
   if (resp.status === 429 && data.error === 'quota_exceeded') {
     showQuotaExceededDialog(data);
     throw new Error('quota_exceeded');
   }
+
+  // Token 过期 → 尝试刷新后重试一次
+  if (resp.status === 401 && _retry === 0) {
+    const refreshToken = localStorage.getItem('ai_refresh');
+    if (refreshToken) {
+      await Auth._doRefresh();
+      if (Auth.token) return apiCall(method, path, body, 1);
+    }
+    // 刷新失败，跳登录
+    Auth.clear();
+    document.getElementById('authScreen').style.display = 'flex';
+    throw new Error('登录已过期，请重新登录');
+  }
+
   if (!resp.ok) throw new Error(data.error || data.message || `API Error ${resp.status}`);
   return data;
 }
@@ -2319,7 +2397,7 @@ async function analyze() {
         <div class="titem">
           <div class="tck done">✓</div>
           <div style="flex:1">
-            <div class="ttitle">${t.title}</div>
+            <div class="ttitle">${esc(t.title)}</div>
             <div class="tmeta">
               ${ptag(t.priority)}
               <span class="tag tc">${t.category}</span>
@@ -2393,7 +2471,7 @@ function rtasks() {
     <div class="titem">
       <div class="tck ${t.status === 'done' ? 'done' : ''}" onclick="togT('${t.id}')">${t.status === 'done' ? '✓' : ''}</div>
       <div style="flex:1">
-        <div class="ttitle ${t.status === 'done' ? 'done' : ''}">${t.title}</div>
+        <div class="ttitle ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}</div>
         <div class="tmeta">
           ${ptag(t.priority)}
           <span class="tag tc">${t.category || '通用'}</span>
@@ -2700,7 +2778,7 @@ async function rmem() {
   try {
     const data = await apiCall('GET', '/api/memory/long');
     document.getElementById('ltm').innerHTML = (data.memories || []).map(m =>
-      `<div class="me"><span class="mk">${m.key}</span><span class="mv">${m.value}</span></div>`
+      `<div class="me"><span class="mk">${esc(m.key)}</span><span class="mv">${esc(m.value)}</span></div>`
     ).join('') || '<div style="text-align:center;color:var(--t3);font-size:12px;padding:16px">暂无长期记忆</div>';
 
     // 情节记忆
@@ -2931,11 +3009,11 @@ function renderFriendsList() {
     return;
   }
   el.innerHTML = FRIENDS_LIST.map(f => `
-    <div class="friend-card" onclick="openFriendProfile('${f.friendId}','${f.friendName}','${f.friendAvatar}')">
-      <div class="fav fav-purple">${f.assistantEmoji || f.friendAvatar || '🤖'}</div>
+    <div class="friend-card" onclick="openFriendProfile('${esc(f.friendId)}','${esc(f.friendName)}','${esc(f.friendAvatar)}')">
+      <div class="fav fav-purple">${esc(f.assistantEmoji || f.friendAvatar || '🤖')}</div>
       <div class="friend-info">
-        <div class="friend-name">${f.assistantName || f.friendName}</div>
-        <div class="friend-meta" style="color:var(--t3);font-size:11px">${f.friendName} 的助手${f.unreadCount?` · <span style="color:var(--pk);font-weight:700">${f.unreadCount} 条新消息</span>`:''}</div>
+        <div class="friend-name">${esc(f.assistantName || f.friendName)}</div>
+        <div class="friend-meta" style="color:var(--t3);font-size:11px">${esc(f.friendName)} 的助手${f.unreadCount?` · <span style="color:var(--pk);font-weight:700">${esc(String(f.unreadCount))} 条新消息</span>`:''}</div>
       </div>
       <div class="friend-action">
         <button class="btn-sm btn-mutual" onclick="event.stopPropagation();openChatWith('${f.friendId}','${f.assistantName||f.friendName}','${f.assistantEmoji||f.friendAvatar}')">💬</button>
@@ -3219,7 +3297,7 @@ async function openFriendProfile(userId, userName, userAvatar) {
       document.getElementById('fpTasksList').innerHTML = profile.recentTasks.map(t =>
         `<div class="titem" style="padding:10px 0">
            <div class="tck" style="background:none"></div>
-           <div style="flex:1"><div class="ttitle">${t.title}</div>
+           <div style="flex:1"><div class="ttitle">${esc(t.title)}</div>
            <div class="tmeta">${ptag(t.priority)}</div></div>
          </div>`).join('');
     }
@@ -3303,8 +3381,8 @@ function renderFriendPickerList(query) {
     <div class="fpicker-item" onclick="onFriendPickerSelect('${f.friendId}','${(f.assistantName||f.friendName).replace(/'/g,'&#39;')}','${(f.assistantEmoji||f.friendAvatar||'🤖').replace(/'/g,'&#39;')}')">
       <div class="fpicker-av">${f.assistantEmoji || f.friendAvatar || '🤖'}</div>
       <div class="fpicker-info">
-        <div class="fpicker-name">${f.assistantName || f.friendName}</div>
-        <div class="fpicker-sub">${f.friendName} 的助手${f.unreadCount ? ` · <span style="color:var(--pk);font-weight:700">${f.unreadCount} 条新消息</span>` : ''}</div>
+        <div class="fpicker-name">${esc(f.assistantName || f.friendName)}</div>
+        <div class="fpicker-sub">${esc(f.friendName)} 的助手${f.unreadCount ? ` · <span style="color:var(--pk);font-weight:700">${esc(String(f.unreadCount))} 条新消息</span>` : ''}</div>
       </div>
       <div class="fpicker-arr">›</div>
     </div>`).join('');
