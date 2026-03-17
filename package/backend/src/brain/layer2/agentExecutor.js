@@ -1,97 +1,34 @@
 'use strict';
+
+/**
+ * Layer 2 Agent Executor
+ *
+ * 所有 LLM 推理请求统一经由 OpenClaw 网关处理，不再直接调用
+ * DeepSeek / OpenAI / Anthropic API。
+ *
+ * 数据流：
+ *   Backend (runAgent) → OpenClaw Gateway → AI 模型
+ *                ↑ 工具执行结果
+ *   executeTool (DB / 搜索 / 计算) ← Backend
+ *   client_action SSE ← 客户端本地技能
+ */
+
 const { v4: uuid } = require('uuid');
-const { query } = require('../../db/client');
+const { query }   = require('../../db/client');
 const { assembleSystemPrompt } = require('../../personality/assembler');
 const { executeTool, getToolDefs } = require('../../tools/registry');
-const { resolveApiKey, resolveBaseUrl, getRuntimeConfig } = require('../../config/runtime');
-
-// ── 模型适配器（统一调用接口）───────────────────────
-async function callLLM({ model, systemPrompt, messages, tools, stream, onChunk }) {
-  // 优先使用运行时配置（调试覆盖），其次回退到 .env
-  const rtCfg = getRuntimeConfig();
-  const effectiveModel = rtCfg.aiModel || model;
-
-  const apiKey = resolveApiKey(effectiveModel);
-  if (!apiKey) throw new Error(`No API key configured for model: ${effectiveModel}`);
-
-  const baseURL = resolveBaseUrl(effectiveModel);
-
-  const { OpenAI } = require('openai');
-  const client = new OpenAI({ apiKey, baseURL });
-
-  const startTime = Date.now();
-  const params = {
-    model: effectiveModel,
-    messages: [{ role: 'system', content: systemPrompt }, ...messages],
-    ...(tools?.length ? { tools, tool_choice: 'auto' } : {}),
-    temperature: 0.7,
-    max_tokens: 2000,
-  };
-
-  let fullText = '';
-  let toolCalls = [];
-  let usage = { prompt_tokens: 0, completion_tokens: 0 };
-
-  if (stream && onChunk) {
-    // 流式模式
-    const streamResponse = await client.chat.completions.create({ ...params, stream: true });
-    const pendingToolCalls = {};
-
-    for await (const chunk of streamResponse) {
-      const delta = chunk.choices[0]?.delta;
-      if (!delta) continue;
-
-      // 文本内容流式推送
-      if (delta.content) {
-        fullText += delta.content;
-        onChunk({ type: 'text', chunk: delta.content });
-      }
-
-      // Tool call 累积
-      if (delta.tool_calls) {
-        for (const tc of delta.tool_calls) {
-          const idx = tc.index;
-          if (!pendingToolCalls[idx]) {
-            pendingToolCalls[idx] = { id: tc.id, name: tc.function?.name || '', args: '' };
-          }
-          if (tc.function?.name) pendingToolCalls[idx].name = tc.function.name;
-          if (tc.function?.arguments) pendingToolCalls[idx].args += tc.function.arguments;
-        }
-      }
-
-      if (chunk.choices[0]?.finish_reason === 'stop' || chunk.choices[0]?.finish_reason === 'tool_calls') {
-        toolCalls = Object.values(pendingToolCalls);
-        break;
-      }
-    }
-  } else {
-    // 非流式模式
-    const response = await client.chat.completions.create(params);
-    fullText = response.choices[0]?.message?.content || '';
-    toolCalls = (response.choices[0]?.message?.tool_calls || []).map(tc => ({
-      id: tc.id,
-      name: tc.function.name,
-      args: tc.function.arguments,
-    }));
-    usage = response.usage || usage;
-  }
-
-  return {
-    text: fullText,
-    toolCalls,
-    usage,
-    latencyMs: Date.now() - startTime,
-    finishWithTools: toolCalls.length > 0,
-  };
-}
+const { callOpenClaw, createEmbedding, isOpenClawConfigured } = require('../openclaw/client');
+const { getRuntimeConfig } = require('../../config/runtime');
 
 // ── 主 Agent 执行器 ───────────────────────────────────
-async function runAgent({ userId, text, toolNames, model, routingRule, intent, send,
-  clientToolDefs = [], clientToolNames = new Set() }) {
-  const runId = `run_${uuid().slice(0, 8)}`;
+async function runAgent({
+  userId, text, toolNames, model, routingRule, intent, send,
+  clientToolDefs = [], clientToolNames = new Set(),
+}) {
+  const runId    = `run_${uuid().slice(0, 8)}`;
   const MAX_STEPS = 8;
-  const messages = [];
-  let totalInputTokens = 0;
+  const messages  = [];
+  let totalInputTokens  = 0;
   let totalOutputTokens = 0;
   const startTime = Date.now();
 
@@ -103,12 +40,12 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
     );
   } catch { /* 数据库不可用时继续 */ }
 
-  // 组装系统提示（人格层）
+  // 组装系统提示（人格层，含长期记忆 + 情节记忆）
   send({ type: 'step', step: 1, label: '人格层加载中...' });
   const systemPrompt = await assembleSystemPrompt(userId, text);
 
   // 第一层处理完成，通知前端
-  send({ type: 'step', step: 2, label: `意图：${intent}，模型：${model}` });
+  send({ type: 'step', step: 2, label: `意图：${intent}，模型：${model}，网关：OpenClaw` });
 
   // 获取工具定义（服务端工具 + 客户端上报的本地技能）
   const tools = [
@@ -119,20 +56,24 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
   // 初始用户消息
   messages.push({ role: 'user', content: text });
 
-  // ── ReAct 循环 ──────────────────────────────────────
+  // ── ReAct 循环（通过 OpenClaw 网关调用 AI）──────────
   for (let step = 0; step < MAX_STEPS; step++) {
-    send({ type: 'step', step: step + 3, label: `第 ${step + 1} 轮推理...` });
+    send({ type: 'step', step: step + 3, label: `第 ${step + 1} 轮推理（OpenClaw）...` });
 
-    const result = await callLLM({
-      model,
+    // 使用运行时配置覆盖模型（调试用）
+    const rt = getRuntimeConfig();
+    const effectiveModel = rt.aiModel || model;
+
+    const result = await callOpenClaw({
+      model:        effectiveModel,
       systemPrompt,
       messages,
       tools,
-      stream: true,
-      onChunk: (chunk) => send(chunk),
+      stream:       true,
+      onChunk:      (chunk) => send(chunk),
     });
 
-    totalInputTokens += result.usage?.prompt_tokens || 0;
+    totalInputTokens  += result.usage?.prompt_tokens    || 0;
     totalOutputTokens += result.usage?.completion_tokens || 0;
 
     // 没有 Tool 调用 → 完成
@@ -143,16 +84,16 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
 
     // 记录 assistant 的 tool_calls
     messages.push({
-      role: 'assistant',
-      content: result.text || null,
+      role:       'assistant',
+      content:    result.text || null,
       tool_calls: result.toolCalls.map(tc => ({
-        id: tc.id,
-        type: 'function',
+        id:       tc.id,
+        type:     'function',
         function: { name: tc.name, arguments: tc.args },
       })),
     });
 
-    // ── 执行每个 Tool ────────────────────────────────
+    // ── 执行每个工具 ─────────────────────────────────
     for (const tc of result.toolCalls) {
       let parsedArgs = {};
       try { parsedArgs = JSON.parse(tc.args); } catch { parsedArgs = {}; }
@@ -161,7 +102,7 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
 
       let toolResult;
       if (clientToolNames.has(tc.name)) {
-        // 客户端技能：不在后端执行，将指令下发给客户端
+        // 客户端技能：下发给前端执行（闹钟、日历、电话等）
         send({ type: 'client_action', name: tc.name, args: parsedArgs });
         toolResult = { dispatched: true, message: `指令已下发至客户端执行：${tc.name}` };
       } else {
@@ -174,15 +115,15 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
 
       send({ type: 'tool_done', name: tc.name, result: toolResult });
 
-      // 如果是 create_tasks，发送专门的任务事件
+      // 任务提取事件
       if (tc.name === 'create_tasks' && toolResult.tasks) {
         send({ type: 'task_extract', tasks: toolResult.tasks, summary: toolResult.summary });
       }
 
       messages.push({
-        role: 'tool',
+        role:         'tool',
         tool_call_id: tc.id,
-        content: JSON.stringify(toolResult),
+        content:      JSON.stringify(toolResult),
       });
     }
   }
@@ -190,12 +131,13 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
   // ── 收尾 ─────────────────────────────────────────────
   const totalLatency = Date.now() - startTime;
 
-  // 估算费用（简化版，实际以官方计费为准）
+  // 估算费用（通过 OpenClaw 路由后，实际费用由 OpenClaw 侧计算）
   const COST = {
     'deepseek-chat':     { i: 0.00014, o: 0.00028 },
     'deepseek-reasoner': { i: 0.00055, o: 0.00219 },
-    'gpt-4o-mini':       { i: 0.00015, o: 0.0006 },
-    'claude-3-5-haiku':  { i: 0.0008,  o: 0.004 },
+    'gpt-4o-mini':       { i: 0.00015, o: 0.0006  },
+    'claude-3-5-haiku':  { i: 0.0008,  o: 0.004   },
+    'claude-sonnet-4-6': { i: 0.003,   o: 0.015   },
   };
   const c = COST[model] || { i: 0.0001, o: 0.0002 };
   const costUsd = (totalInputTokens * c.i + totalOutputTokens * c.o) / 1000;
@@ -203,7 +145,8 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
   // 写审计日志
   try {
     await query(
-      `INSERT INTO ai_audit_logs (user_id, run_id, model, routing_rule, intent, input_tokens, output_tokens, latency_ms, cost_usd)
+      `INSERT INTO ai_audit_logs
+         (user_id, run_id, model, routing_rule, intent, input_tokens, output_tokens, latency_ms, cost_usd)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [userId, runId, model, routingRule, intent, totalInputTokens, totalOutputTokens, totalLatency, costUsd]
     );
@@ -213,60 +156,68 @@ async function runAgent({ userId, text, toolNames, model, routingRule, intent, s
     );
   } catch { /* 数据库不可用 */ }
 
-  // 异步摘要到情节记忆
+  // 异步摘要到情节记忆（也经 OpenClaw）
   setImmediate(() => summarizeToEpisodic(runId, userId, messages).catch(() => {}));
 
   send({
-    type: 'done',
+    type:        'done',
     runId,
     totalTokens: totalInputTokens + totalOutputTokens,
-    latencyMs: totalLatency,
-    costUsd: costUsd.toFixed(6),
+    latencyMs:   totalLatency,
+    costUsd:     costUsd.toFixed(6),
     model,
+    gateway:     'openclaw',
   });
 }
 
-// ── 异步摘要到情节记忆 ────────────────────────────────
+// ── 异步摘要到情节记忆（通过 OpenClaw）───────────────
 async function summarizeToEpisodic(runId, userId, messages) {
-  if (!process.env.DEEPSEEK_API_KEY && !process.env.OPENAI_API_KEY) return;
+  // OpenClaw 未配置且无任何 LLM key 时跳过
+  if (!isOpenClawConfigured() && !process.env.DEEPSEEK_API_KEY && !process.env.OPENAI_API_KEY) return;
 
   const recent = messages.slice(-6).map(m =>
     `${m.role}: ${typeof m.content === 'string' ? m.content.slice(0, 200) : '[tool]'}`
   ).join('\n');
 
   try {
-    const { OpenAI } = require('openai');
-    const isDeepSeek = !!process.env.DEEPSEEK_API_KEY;
-    const client = new OpenAI({
-      apiKey: isDeepSeek ? process.env.DEEPSEEK_API_KEY : process.env.OPENAI_API_KEY,
-      baseURL: isDeepSeek ? 'https://api.deepseek.com' : undefined,
-    });
+    let summary = '';
 
-    const res = await client.chat.completions.create({
-      model: isDeepSeek ? 'deepseek-chat' : 'gpt-4o-mini',
-      messages: [{
-        role: 'user',
-        content: `用1-2句话总结这次对话的目标和结果（中文）：\n${recent}`,
-      }],
-      max_tokens: 150,
-    });
+    if (isOpenClawConfigured()) {
+      // 优先通过 OpenClaw 生成摘要
+      const result = await callOpenClaw({
+        model:        process.env.OPENCLAW_DEFAULT_MODEL || 'deepseek-chat',
+        systemPrompt: '你是一个对话摘要助手，用简洁中文总结对话。',
+        messages:     [{ role: 'user', content: `用1-2句话总结这次对话的目标和结果（中文）：\n${recent}` }],
+        stream:       false,
+      });
+      summary = result.text || '';
+    } else {
+      // 降级：直接调用 LLM（无 OpenClaw 时兼容旧逻辑）
+      const { OpenAI } = require('openai');
+      const isDeepSeek = !!process.env.DEEPSEEK_API_KEY;
+      const client = new OpenAI({
+        apiKey:  isDeepSeek ? process.env.DEEPSEEK_API_KEY : process.env.OPENAI_API_KEY,
+        baseURL: isDeepSeek ? 'https://api.deepseek.com' : undefined,
+      });
+      const res = await client.chat.completions.create({
+        model:      isDeepSeek ? 'deepseek-chat' : 'gpt-4o-mini',
+        messages:   [{ role: 'user', content: `用1-2句话总结这次对话的目标和结果（中文）：\n${recent}` }],
+        max_tokens: 150,
+      });
+      summary = res.choices[0]?.message?.content || '';
+    }
 
-    const summary = res.choices[0]?.message?.content || '';
     if (!summary) return;
 
-    // 如果有 OpenAI Key，生成 embedding 存向量
-    if (process.env.OPENAI_API_KEY) {
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const embRes = await openai.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: summary,
-      });
+    // 生成 embedding（经 OpenClaw 网关或直接 OpenAI）
+    try {
+      const embedding = await createEmbedding(summary);
       await query(
         `INSERT INTO episodic_memories (user_id, summary, embedding, run_id) VALUES ($1,$2,$3::vector,$4)`,
-        [userId, summary, JSON.stringify(embRes.data[0].embedding), runId]
+        [userId, summary, JSON.stringify(embedding), runId]
       );
-    } else {
-      // 无 embedding，纯文本存储
+    } catch {
+      // embedding 不可用时，纯文本存储
       await query(
         `INSERT INTO episodic_memories (user_id, summary, run_id) VALUES ($1,$2,$3)`,
         [userId, summary, runId]

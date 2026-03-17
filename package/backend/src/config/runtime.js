@@ -5,7 +5,11 @@
 // 优先级：runtimeConfig > process.env
 
 const _cfg = {
-  // AI API
+  // OpenClaw 网关（优先级最高，所有 AI 调用经此路由）
+  openclawUrl:   null,   // OpenClaw 服务地址，如 http://192.168.1.100:18789
+  openclawToken: null,   // OpenClaw 认证 token（gateway.auth.mode 启用时需要）
+
+  // AI API（直连模式降级用，OpenClaw 已配置时不生效）
   aiBaseUrl:    null,   // 覆盖 DeepSeek/OpenAI base URL
   aiApiKey:     null,   // 覆盖 API Key（优先于 env 中各 provider key）
   aiModel:      null,   // 覆盖默认模型名称
@@ -20,7 +24,7 @@ function getRuntimeConfig() {
 }
 
 function setRuntimeConfig(updates = {}) {
-  const allowed = ['aiBaseUrl', 'aiApiKey', 'aiModel', 'backendUrl', 'backendPort'];
+  const allowed = ['openclawUrl', 'openclawToken', 'aiBaseUrl', 'aiApiKey', 'aiModel', 'backendUrl', 'backendPort'];
   for (const k of allowed) {
     if (Object.prototype.hasOwnProperty.call(updates, k)) {
       _cfg[k] = updates[k] || null;
