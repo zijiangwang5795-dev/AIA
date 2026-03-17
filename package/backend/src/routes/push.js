@@ -36,6 +36,61 @@ module.exports = async function pushRoutes(app) {
     return { success: true };
   });
 
+  // ── 轮询通知（替代 FCM，Android 客户端定期拉取）──
+  app.get('/notifications/poll', {
+    preHandler: [requireAuth],
+  }, async (req, reply) => {
+    const userId = req.userId;
+    const since = parseInt(req.query.since || '0', 10);
+    const sinceTs = since > 0 ? new Date(since).toISOString() : new Date(Date.now() - 3600_000).toISOString();
+
+    const notifications = [];
+
+    // 1. 未读消息
+    const msgs = await query(`
+      SELECT m.content, u.display_name, u.assistant_name
+      FROM messages m
+      JOIN users u ON u.id = m.from_user_id
+      WHERE m.to_user_id = $1
+        AND m.read_at IS NULL
+        AND m.created_at > $2
+      ORDER BY m.created_at ASC
+      LIMIT 10
+    `, [userId, sinceTs]);
+
+    for (const row of msgs.rows) {
+      const sender = row.assistant_name || row.display_name || '好友';
+      notifications.push({
+        type: 'friend_msg',
+        title: sender + ' 发来消息',
+        body: row.content.slice(0, 80),
+        nav_target: 'friends',
+      });
+    }
+
+    // 2. 即将到期任务提醒（未来2小时内 deadline，状态 pending）
+    const tasks = await query(`
+      SELECT title FROM tasks
+      WHERE user_id = $1
+        AND status = 'pending'
+        AND deadline IS NOT NULL
+        AND created_at > $2
+      ORDER BY created_at ASC
+      LIMIT 5
+    `, [userId, sinceTs]);
+
+    for (const row of tasks.rows) {
+      notifications.push({
+        type: 'task_reminder',
+        title: '新任务',
+        body: row.title,
+        nav_target: 'tasks',
+      });
+    }
+
+    return { notifications };
+  });
+
   // ── 发送推送通知（内部接口，可供定时任务调用）────
   // 生产环境：调用 Firebase Admin SDK / APNs
   app.post('/push/send', {

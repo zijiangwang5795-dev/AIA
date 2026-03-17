@@ -15,7 +15,7 @@ import android.speech.SpeechRecognizer;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import com.aia.assistant.MainActivity;
-import com.aia.assistant.push.FCMService;
+import com.aia.assistant.push.PollWorker;
 import com.aia.assistant.util.PrefHelper;
 import java.util.List;
 
@@ -102,14 +102,17 @@ public class AndroidBridge {
     }
 
     /** 保存 Access Token 到 SharedPreferences（跨进程共享给小组件）
-     *  同时触发 FCM Token 注册（首次登录后确保推送令牌已上报）
+     *  同时启动后台轮询任务
      */
     @JavascriptInterface
     public void saveToken(String token) {
         PrefHelper.saveToken(context, token);
-        // 登录成功后注册推送令牌
+        // 登录成功后启动轮询
         if (token != null && !token.trim().isEmpty()) {
-            FCMService.registerAfterLogin(context);
+            PollWorker.schedule(context);
+        } else {
+            // token 清空（登出）时取消轮询
+            PollWorker.cancel(context);
         }
     }
 

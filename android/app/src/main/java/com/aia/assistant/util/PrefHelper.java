@@ -21,7 +21,7 @@ public class PrefHelper {
     private static final String KEY_WIDGET_TASKS = "widget_task_count";
     private static final String KEY_WIDGET_STATUS = "widget_status";
     private static final String KEY_LAST_SYNC = "last_sync_time";
-    private static final String KEY_FCM_TOKEN = "fcm_token";
+    private static final String KEY_LAST_POLL = "last_poll_ms";
 
     private static SharedPreferences prefs(Context context) {
         return context.getApplicationContext().getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
@@ -83,13 +83,14 @@ public class PrefHelper {
         return time != null ? time : "--:--";
     }
 
-    // ── FCM Token ─────────────────────────────────────
-    public static void saveFcmToken(Context context, String token) {
-        prefs(context).edit().putString(KEY_FCM_TOKEN, token).apply();
+    // ── 轮询时间戳 ────────────────────────────────────
+    public static void saveLastPollTime(Context context, long ms) {
+        prefs(context).edit().putLong(KEY_LAST_POLL, ms).apply();
     }
 
-    public static String getFcmToken(Context context) {
-        String token = prefs(context).getString(KEY_FCM_TOKEN, "");
-        return token != null ? token : "";
+    public static long getLastPollTime(Context context) {
+        // 默认：当前时间往前推 1 小时，避免首次轮询收到大量历史通知
+        long defaultSince = System.currentTimeMillis() - 3600_000L;
+        return prefs(context).getLong(KEY_LAST_POLL, defaultSince);
     }
 }
