@@ -71,6 +71,7 @@ async function runAgent({
       tools,
       stream:       true,
       onChunk:      (chunk) => send(chunk),
+      userId,       // 用于 dedicated/shared 模式路由
     });
 
     totalInputTokens  += result.usage?.prompt_tokens    || 0;
@@ -189,6 +190,7 @@ async function summarizeToEpisodic(runId, userId, messages) {
         systemPrompt: '你是一个对话摘要助手，用简洁中文总结对话。',
         messages:     [{ role: 'user', content: `用1-2句话总结这次对话的目标和结果（中文）：\n${recent}` }],
         stream:       false,
+        userId,
       });
       summary = result.text || '';
     } else {
@@ -211,7 +213,7 @@ async function summarizeToEpisodic(runId, userId, messages) {
 
     // 生成 embedding（经 OpenClaw 网关或直接 OpenAI）
     try {
-      const embedding = await createEmbedding(summary);
+      const embedding = await createEmbedding(summary, userId);
       await query(
         `INSERT INTO episodic_memories (user_id, summary, embedding, run_id) VALUES ($1,$2,$3::vector,$4)`,
         [userId, summary, JSON.stringify(embedding), runId]

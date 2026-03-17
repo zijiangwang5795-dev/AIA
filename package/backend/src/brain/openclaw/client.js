@@ -3,64 +3,134 @@
 /**
  * OpenClaw 网关客户端
  *
- * 架构：Frontend → Backend → OpenClaw → AI 模型
+ * 支持两种部署模式（通过 OPENCLAW_MODE 切换）：
  *
- * OpenClaw 部署在服务器上（默认端口 18789），提供 OpenAI 兼容的
- * /v1/chat/completions 和 /v1/embeddings 接口，统一管理所有 AI 调用。
- * 后端不再直接调用 DeepSeek / OpenAI / Anthropic，所有推理请求
- * 统一经过 OpenClaw 网关路由。
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  Mode A: dedicated（独占模式，默认）                                 │
+ * │  每个用户对应一个独立的 OpenClaw 实例。                              │
+ * │  用户的实例地址存储在 user_memories 表中：                          │
+ * │    key = '_openclaw_url'   value = 'http://user-server:18789'       │
+ * │    key = '_openclaw_token' value = '<token>'                        │
+ * │  若用户未配置，则回退到全局 OPENCLAW_URL。                          │
+ * │                                                                     │
+ * │  适用场景：                                                         │
+ * │    · 企业私有化：每个部门/用户独占算力与数据                        │
+ * │    · 用户自持服务器，接入自己的 OpenClaw 实例                       │
+ * │    · 隔离性要求高，不允许跨用户共享上下文                           │
+ * ├─────────────────────────────────────────────────────────────────────┤
+ * │  Mode B: shared（共享模式）                                         │
+ * │  多用户共享同一个 OpenClaw 实例，每用户通过 agent_id 区分。         │
+ * │  agent_id 格式：aia_{userId}                                       │
+ * │  · 通过 user 字段（OpenAI 标准）传递给 OpenClaw 做 session 路由     │
+ * │  · 通过 X-OpenClaw-Agent 请求头传递（OpenClaw 扩展头，可选）        │
+ * │                                                                     │
+ * │  适用场景：                                                         │
+ * │    · SaaS 多租户：运营方统一部署一个 OpenClaw，服务所有用户         │
+ * │    · 资源受限：一台服务器跑一个实例服务多用户                       │
+ * │    · 快速接入：无需为每个用户单独部署实例                           │
+ * └─────────────────────────────────────────────────────────────────────┘
  *
- * 配置方式（.env）：
- *   OPENCLAW_URL=http://<your-server>:18789   # OpenClaw 服务地址
- *   OPENCLAW_TOKEN=<token>                    # 可选，gateway.auth.mode 启用时填写
+ * 全局 .env 配置：
+ *   OPENCLAW_URL=http://<server>:18789    # 全局（或共享模式唯一）实例地址
+ *   OPENCLAW_TOKEN=<token>               # 全局 token
+ *   OPENCLAW_MODE=dedicated|shared       # 部署模式，默认 dedicated
+ *   OPENCLAW_DEFAULT_MODEL=deepseek-chat # 默认模型
+ *   OPENCLAW_EMBED_MODEL=text-embedding-3-small
  */
 
 const { getRuntimeConfig } = require('../../config/runtime');
 
-// ── 获取当前生效的 OpenClaw 配置 ─────────────────────
+// ── 全局配置 ──────────────────────────────────────────
 function getOpenClawConfig() {
   const rt = getRuntimeConfig();
   return {
     url:          rt.openclawUrl   || process.env.OPENCLAW_URL   || 'http://localhost:18789',
     token:        rt.openclawToken || process.env.OPENCLAW_TOKEN || 'openclaw',
+    mode:         rt.openclawMode  || process.env.OPENCLAW_MODE  || 'dedicated',
     defaultModel: process.env.OPENCLAW_DEFAULT_MODEL             || 'deepseek-chat',
   };
 }
 
-// ── 检查 OpenClaw 是否已配置 ─────────────────────────
+// ── 检查 OpenClaw 是否已配置 ──────────────────────────
 function isOpenClawConfigured() {
   return !!(process.env.OPENCLAW_URL || getRuntimeConfig().openclawUrl);
 }
 
+// ── 解析用户生效配置（综合全局配置 + 用户专属配置）──────
+/**
+ * dedicated 模式：优先从 user_memories 取用户专属 URL/token。
+ * shared 模式：始终使用全局 URL，返回 agentId 供请求路由。
+ *
+ * @param {string|null} userId
+ * @returns {Promise<{url, token, agentId|null}>}
+ */
+async function resolveUserConfig(userId) {
+  const base = getOpenClawConfig();
+
+  if (base.mode === 'shared' || !userId) {
+    // 共享模式：全局 URL + agentId 区分用户
+    return {
+      url:     base.url,
+      token:   base.token,
+      agentId: userId ? `aia_${userId}` : null,
+    };
+  }
+
+  // 独占模式：尝试读取用户自己的 OpenClaw 地址
+  try {
+    const { query } = require('../../db/client');
+    const res = await query(
+      `SELECT key, value FROM user_memories
+       WHERE user_id=$1 AND key IN ('_openclaw_url','_openclaw_token')`,
+      [userId]
+    );
+    const map = Object.fromEntries(res.rows.map(r => [r.key, r.value]));
+    return {
+      url:     map['_openclaw_url']   || base.url,
+      token:   map['_openclaw_token'] || base.token,
+      agentId: null,   // 独占模式不需要 agentId（整个实例属于该用户）
+    };
+  } catch {
+    return { url: base.url, token: base.token, agentId: null };
+  }
+}
+
 // ── 统一 LLM 调用（通过 OpenClaw 网关）──────────────
 /**
- * @param {object} opts
+ * @param {object}   opts
  * @param {string}   opts.model        - 模型名（传递给 OpenClaw，由其路由到具体 provider）
  * @param {string}   opts.systemPrompt - 系统提示词（人格层）
- * @param {Array}    opts.messages     - 对话历史（user / assistant / tool 格式）
- * @param {Array}    [opts.tools]      - OpenAI Function Calling 格式工具定义
+ * @param {Array}    opts.messages     - 对话历史（user/assistant/tool 格式）
+ * @param {Array}    [opts.tools]      - OpenAI Function Calling 工具定义
  * @param {boolean}  [opts.stream]     - 是否流式输出
- * @param {Function} [opts.onChunk]    - 流式回调 { type, chunk } 或 { type, toolCalls }
+ * @param {Function} [opts.onChunk]    - 流式回调 { type, chunk }
+ * @param {string}   [opts.userId]     - 当前用户 ID（用于路由解析）
  * @returns {Promise<{text, toolCalls, usage, latencyMs, finishWithTools}>}
  */
-async function callOpenClaw({ model, systemPrompt, messages, tools, stream, onChunk }) {
+async function callOpenClaw({ model, systemPrompt, messages, tools, stream, onChunk, userId }) {
   const { OpenAI } = require('openai');
-  const cfg = getOpenClawConfig();
+  const cfg      = getOpenClawConfig();
+  const resolved = await resolveUserConfig(userId);
 
   const client = new OpenAI({
-    apiKey:  cfg.token,
-    baseURL: `${cfg.url}/v1`,
+    apiKey:       resolved.token,
+    baseURL:      `${resolved.url}/v1`,
+    defaultHeaders: resolved.agentId
+      ? { 'X-OpenClaw-Agent': resolved.agentId }   // 共享模式：标识当前用户 agent
+      : {},
   });
 
   const effectiveModel = model || cfg.defaultModel;
   const startTime = Date.now();
 
   const params = {
-    model: effectiveModel,
+    model:    effectiveModel,
     messages: [{ role: 'system', content: systemPrompt }, ...messages],
     ...(tools?.length ? { tools, tool_choice: 'auto' } : {}),
     temperature: 0.7,
     max_tokens:  2000,
+    // OpenAI 标准 user 字段 —— 共享模式下 OpenClaw 用此做 session 隔离
+    ...(resolved.agentId ? { user: resolved.agentId } : {}),
   };
 
   let fullText  = '';
@@ -68,7 +138,6 @@ async function callOpenClaw({ model, systemPrompt, messages, tools, stream, onCh
   let usage     = { prompt_tokens: 0, completion_tokens: 0 };
 
   if (stream && onChunk) {
-    // ── 流式模式 ─────────────────────────────────────
     const streamResp = await client.chat.completions.create({ ...params, stream: true });
     const pending    = {};
 
@@ -99,7 +168,6 @@ async function callOpenClaw({ model, systemPrompt, messages, tools, stream, onCh
       }
     }
   } else {
-    // ── 非流式模式 ───────────────────────────────────
     const resp = await client.chat.completions.create(params);
     fullText   = resp.choices[0]?.message?.content || '';
     toolCalls  = (resp.choices[0]?.message?.tool_calls || []).map(tc => ({
@@ -122,24 +190,30 @@ async function callOpenClaw({ model, systemPrompt, messages, tools, stream, onCh
 // ── Embedding 生成（通过 OpenClaw 网关）──────────────
 /**
  * 生成文本向量，用于情节记忆相似度检索。
- * 如果 OpenClaw 未配置，或 OpenClaw 不支持 embeddings，
- * 则回退到直接调用 OpenAI。
+ * 同样遵循 dedicated/shared 模式，使用用户对应的实例。
  */
-async function createEmbedding(text) {
+async function createEmbedding(text, userId) {
   const { OpenAI } = require('openai');
   const cfg = getOpenClawConfig();
 
-  // 优先走 OpenClaw（若已配置）
-  const useOpenClaw = isOpenClawConfigured();
-  const client = useOpenClaw
-    ? new OpenAI({ apiKey: cfg.token, baseURL: `${cfg.url}/v1` })
-    : new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  if (isOpenClawConfigured()) {
+    const resolved = await resolveUserConfig(userId);
+    const client = new OpenAI({
+      apiKey:  resolved.token,
+      baseURL: `${resolved.url}/v1`,
+      defaultHeaders: resolved.agentId ? { 'X-OpenClaw-Agent': resolved.agentId } : {},
+    });
+    const res = await client.embeddings.create({
+      model: process.env.OPENCLAW_EMBED_MODEL || 'text-embedding-3-small',
+      input: text,
+    });
+    return res.data[0].embedding;
+  }
 
-  const res = await client.embeddings.create({
-    model: useOpenClaw ? (process.env.OPENCLAW_EMBED_MODEL || 'text-embedding-3-small') : 'text-embedding-3-small',
-    input: text,
-  });
+  // 降级：直连 OpenAI
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const res = await client.embeddings.create({ model: 'text-embedding-3-small', input: text });
   return res.data[0].embedding;
 }
 
-module.exports = { callOpenClaw, createEmbedding, isOpenClawConfigured, getOpenClawConfig };
+module.exports = { callOpenClaw, createEmbedding, isOpenClawConfigured, getOpenClawConfig, resolveUserConfig };
