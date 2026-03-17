@@ -27,7 +27,7 @@
  *   OPENCLAW_EMBED_MODEL=text-embedding-3-small
  */
 
-const { getRuntimeConfig } = require('../../config/runtime');
+const { getRuntimeConfig, resolveApiKey, resolveBaseUrl } = require('../../config/runtime');
 
 // ── 全局配置 ──────────────────────────────────────────
 function getOpenClawConfig() {
@@ -130,6 +130,12 @@ async function resolveUserConfig(userId) {
 async function callOpenClaw({ model, systemPrompt, messages, tools, stream, onChunk, userId }) {
   const { OpenAI } = require('openai');
   const cfg      = getOpenClawConfig();
+
+  // ── 降级判断：无 OpenClaw 时直连大模型 API ──────────
+  if (!isOpenClawConfigured()) {
+    return _callDirectLLM({ model, systemPrompt, messages, tools, stream, onChunk });
+  }
+
   const resolved = await resolveUserConfig(userId);
 
   const client = new OpenAI({
@@ -292,6 +298,100 @@ async function syncAgentConfig(userId, { staticPersona, assistantName, assistant
   } catch {
     // 同步失败不阻断主流程（OpenClaw 可能未支持此端点）
   }
+}
+
+// ── 直连大模型（OpenClaw 未配置时的降级路径）───────────
+/**
+ * 直接调用 DeepSeek / OpenAI / Anthropic API，
+ * 无需 OpenClaw 网关，适用于本地开发或快速验证场景。
+ *
+ * 模型选择规则（优先级从高到低）：
+ *   1. runtimeConfig.aiModel（运行时动态覆盖）
+ *   2. 传入的 model 参数
+ *   3. DIRECT_MODEL env（默认 deepseek-chat）
+ *
+ * API Key / Base URL：
+ *   1. runtimeConfig.aiApiKey / aiBaseUrl
+ *   2. 按模型名匹配 DEEPSEEK_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY
+ */
+async function _callDirectLLM({ model, systemPrompt, messages, tools, stream, onChunk }) {
+  const { OpenAI } = require('openai');
+  const rt = getRuntimeConfig();
+
+  const effectiveModel = rt.aiModel || model || process.env.DIRECT_MODEL || 'deepseek-chat';
+  const apiKey   = resolveApiKey(effectiveModel);
+  const baseURL  = resolveBaseUrl(effectiveModel);
+
+  if (!apiKey) {
+    throw new Error(
+      `直连模式：未找到 API Key。请在 .env 中设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY，` +
+      `或在 .env 中配置 OPENCLAW_URL 使用网关模式。`
+    );
+  }
+
+  const client = new OpenAI({ apiKey, baseURL });
+
+  const params = {
+    model:    effectiveModel,
+    messages: [{ role: 'system', content: systemPrompt }, ...messages],
+    ...(tools?.length ? { tools, tool_choice: 'auto' } : {}),
+    temperature: 0.7,
+    max_tokens:  2000,
+  };
+
+  let fullText  = '';
+  let toolCalls = [];
+  let usage     = { prompt_tokens: 0, completion_tokens: 0 };
+  const startTime = Date.now();
+
+  if (stream && onChunk) {
+    const streamResp = await client.chat.completions.create({ ...params, stream: true });
+    const pending    = {};
+
+    for await (const chunk of streamResp) {
+      const delta = chunk.choices[0]?.delta;
+      if (!delta) continue;
+
+      if (delta.content) {
+        fullText += delta.content;
+        onChunk({ type: 'text', chunk: delta.content });
+      }
+
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx = tc.index;
+          if (!pending[idx]) {
+            pending[idx] = { id: tc.id || `tc_${idx}`, name: tc.function?.name || '', args: '' };
+          }
+          if (tc.function?.name)      pending[idx].name  = tc.function.name;
+          if (tc.function?.arguments) pending[idx].args += tc.function.arguments;
+        }
+      }
+
+      const reason = chunk.choices[0]?.finish_reason;
+      if (reason === 'stop' || reason === 'tool_calls') {
+        toolCalls = Object.values(pending);
+        break;
+      }
+    }
+  } else {
+    const resp = await client.chat.completions.create(params);
+    fullText   = resp.choices[0]?.message?.content || '';
+    toolCalls  = (resp.choices[0]?.message?.tool_calls || []).map(tc => ({
+      id:   tc.id,
+      name: tc.function.name,
+      args: tc.function.arguments,
+    }));
+    usage = resp.usage || usage;
+  }
+
+  return {
+    text:            fullText,
+    toolCalls,
+    usage,
+    latencyMs:       Date.now() - startTime,
+    finishWithTools: toolCalls.length > 0,
+  };
 }
 
 module.exports = { callOpenClaw, createEmbedding, isOpenClawConfigured, getOpenClawConfig, resolveUserConfig, syncAgentConfig };
