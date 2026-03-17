@@ -45,7 +45,8 @@ async function runAgent({
   const systemPrompt = await assembleSystemPrompt(userId, text);
 
   // 第一层处理完成，通知前端
-  send({ type: 'step', step: 2, label: `意图：${intent}，模型：${model}，网关：OpenClaw` });
+  const gateway = isOpenClawConfigured() ? 'OpenClaw 网关' : '直连大模型';
+  send({ type: 'step', step: 2, label: `意图：${intent}，模型：${model}，路由：${gateway}` });
 
   // 获取工具定义（服务端工具 + 客户端上报的本地技能）
   const tools = [
