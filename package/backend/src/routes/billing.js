@@ -2,6 +2,7 @@
 const { query } = require('../db/client');
 const { authMiddleware: requireAuth } = require('../auth/middleware');
 const { getUserPlan, getMonthlyUsage } = require('../middleware/quota');
+const { resolveUserConfig } = require('../brain/openclaw/client');
 
 module.exports = async function billingRoutes(app) {
 
@@ -99,11 +100,21 @@ module.exports = async function billingRoutes(app) {
         payment_method = EXCLUDED.payment_method
     `, [userId, planId, periodEnd.toISOString(), paymentMethod]);
 
+    // 升级后解析 OpenClaw 接入状态（前端据此引导用户配置专属实例）
+    const openclawStatus = await resolveUserConfig(userId).catch(() => null);
+
     return {
       success: true,
       message: `已升级至 ${plan.name}`,
       plan: { id: plan.id, name: plan.name },
       period_end: periodEnd.toISOString(),
+      openclaw: {
+        mode:               openclawStatus?.mode               || 'shared',
+        dedicatedConfigured: openclawStatus?.dedicatedConfigured || false,
+        // 告知前端：需要配置专属 OpenClaw 实例
+        setupRequired: !openclawStatus?.dedicatedConfigured,
+        setupUrl: '/api/openclaw/config',
+      },
     };
   });
 

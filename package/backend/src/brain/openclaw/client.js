@@ -3,38 +3,27 @@
 /**
  * OpenClaw 网关客户端
  *
- * 支持两种部署模式（通过 OPENCLAW_MODE 切换）：
+ * ── 产品形态 ──────────────────────────────────────────────────────────────
  *
- * ┌─────────────────────────────────────────────────────────────────────┐
- * │  Mode A: dedicated（独占模式，默认）                                 │
- * │  每个用户对应一个独立的 OpenClaw 实例。                              │
- * │  用户的实例地址存储在 user_memories 表中：                          │
- * │    key = '_openclaw_url'   value = 'http://user-server:18789'       │
- * │    key = '_openclaw_token' value = '<token>'                        │
- * │  若用户未配置，则回退到全局 OPENCLAW_URL。                          │
- * │                                                                     │
- * │  适用场景：                                                         │
- * │    · 企业私有化：每个部门/用户独占算力与数据                        │
- * │    · 用户自持服务器，接入自己的 OpenClaw 实例                       │
- * │    · 隔离性要求高，不允许跨用户共享上下文                           │
- * ├─────────────────────────────────────────────────────────────────────┤
- * │  Mode B: shared（共享模式）                                         │
- * │  多用户共享同一个 OpenClaw 实例，每用户通过 agent_id 区分。         │
- * │  agent_id 格式：aia_{userId}                                       │
- * │  · 通过 user 字段（OpenAI 标准）传递给 OpenClaw 做 session 路由     │
- * │  · 通过 X-OpenClaw-Agent 请求头传递（OpenClaw 扩展头，可选）        │
- * │                                                                     │
- * │  适用场景：                                                         │
- * │    · SaaS 多租户：运营方统一部署一个 OpenClaw，服务所有用户         │
- * │    · 资源受限：一台服务器跑一个实例服务多用户                       │
- * │    · 快速接入：无需为每个用户单独部署实例                           │
- * └─────────────────────────────────────────────────────────────────────┘
+ *  免费用户（free plan）→ 共享模式（shared）
+ *    · 使用平台统一部署的 OpenClaw 实例（OPENCLAW_URL）
+ *    · 通过 agentId = aia_{userId} 在实例内隔离会话
+ *    · 注册即可用，无需额外配置
  *
- * 全局 .env 配置：
- *   OPENCLAW_URL=http://<server>:18789    # 全局（或共享模式唯一）实例地址
+ *  付费用户（paid plan）→ 独占模式（dedicated）
+ *    · 使用用户自己的 OpenClaw 实例（或平台分配的专属实例）
+ *    · 实例地址存储在 user_memories：key = '_openclaw_url'
+ *    · 未配置专属地址时，暂时回退到共享实例（待配置提醒）
+ *
+ * ── 模式判断来源 ────────────────────────────────────────────────────────
+ *   优先级：用户订阅等级 > 全局 OPENCLAW_MODE 兜底
+ *   · free plan  → shared
+ *   · paid plan  → dedicated（按 _openclaw_url 路由）
+ *
+ * ── .env 配置 ────────────────────────────────────────────────────────────
+ *   OPENCLAW_URL=http://<server>:18789    # 平台共享 OpenClaw 地址（免费用户）
  *   OPENCLAW_TOKEN=<token>               # 全局 token
- *   OPENCLAW_MODE=dedicated|shared       # 部署模式，默认 dedicated
- *   OPENCLAW_DEFAULT_MODEL=deepseek-chat # 默认模型
+ *   OPENCLAW_DEFAULT_MODEL=deepseek-chat
  *   OPENCLAW_EMBED_MODEL=text-embedding-3-small
  */
 
@@ -46,7 +35,6 @@ function getOpenClawConfig() {
   return {
     url:          rt.openclawUrl   || process.env.OPENCLAW_URL   || 'http://localhost:18789',
     token:        rt.openclawToken || process.env.OPENCLAW_TOKEN || 'openclaw',
-    mode:         rt.openclawMode  || process.env.OPENCLAW_MODE  || 'dedicated',
     defaultModel: process.env.OPENCLAW_DEFAULT_MODEL             || 'deepseek-chat',
   };
 }
@@ -56,27 +44,47 @@ function isOpenClawConfigured() {
   return !!(process.env.OPENCLAW_URL || getRuntimeConfig().openclawUrl);
 }
 
-// ── 解析用户生效配置（综合全局配置 + 用户专属配置）──────
+// ── 判断用户是否为付费用户 ────────────────────────────
+async function isPaidUser(userId) {
+  if (!userId) return false;
+  try {
+    const { getUserPlan } = require('../../middleware/quota');
+    const plan = await getUserPlan(userId);
+    return plan && plan.id !== 'free';
+  } catch {
+    return false;
+  }
+}
+
+// ── 解析用户生效配置（按订阅等级动态路由）──────────────
 /**
- * dedicated 模式：优先从 user_memories 取用户专属 URL/token。
- * shared 模式：始终使用全局 URL，返回 agentId 供请求路由。
+ * 免费用户 → shared（全局 URL + agentId）
+ * 付费用户 → dedicated（user_memories._openclaw_url；未配置时暂回退 shared）
  *
  * @param {string|null} userId
- * @returns {Promise<{url, token, agentId|null}>}
+ * @returns {Promise<{url, token, agentId|null, mode: 'shared'|'dedicated', dedicatedConfigured: boolean}>}
  */
 async function resolveUserConfig(userId) {
   const base = getOpenClawConfig();
 
-  if (base.mode === 'shared' || !userId) {
-    // 共享模式：全局 URL + agentId 区分用户
+  if (!userId) {
+    return { url: base.url, token: base.token, agentId: null, mode: 'shared', dedicatedConfigured: false };
+  }
+
+  const paid = await isPaidUser(userId);
+
+  if (!paid) {
+    // 免费用户：共享实例，agentId 隔离
     return {
-      url:     base.url,
-      token:   base.token,
-      agentId: userId ? `aia_${userId}` : null,
+      url:                base.url,
+      token:              base.token,
+      agentId:            `aia_${userId}`,
+      mode:               'shared',
+      dedicatedConfigured: false,
     };
   }
 
-  // 独占模式：尝试读取用户自己的 OpenClaw 地址
+  // 付费用户：尝试读取专属 OpenClaw 地址
   try {
     const { query } = require('../../db/client');
     const res = await query(
@@ -85,14 +93,26 @@ async function resolveUserConfig(userId) {
       [userId]
     );
     const map = Object.fromEntries(res.rows.map(r => [r.key, r.value]));
-    return {
-      url:     map['_openclaw_url']   || base.url,
-      token:   map['_openclaw_token'] || base.token,
-      agentId: null,   // 独占模式不需要 agentId（整个实例属于该用户）
-    };
-  } catch {
-    return { url: base.url, token: base.token, agentId: null };
-  }
+
+    if (map['_openclaw_url']) {
+      return {
+        url:                map['_openclaw_url'],
+        token:              map['_openclaw_token'] || base.token,
+        agentId:            null,    // 整个实例归该用户，无需 agentId
+        mode:               'dedicated',
+        dedicatedConfigured: true,
+      };
+    }
+  } catch { /* ignore */ }
+
+  // 付费但尚未配置专属地址：暂用共享，标记未配置
+  return {
+    url:                base.url,
+    token:              base.token,
+    agentId:            `aia_${userId}`,
+    mode:               'shared',
+    dedicatedConfigured: false,
+  };
 }
 
 // ── 统一 LLM 调用（通过 OpenClaw 网关）──────────────

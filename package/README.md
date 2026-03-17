@@ -134,35 +134,39 @@ cp frontend/index.html VoiceTaskApp/app/src/main/assets/www/
 
 ---
 
-## OpenClaw 部署模式
+## OpenClaw 接入模式（按订阅自动切换）
 
-通过 `OPENCLAW_MODE` 选择接入方式：
+模式由用户订阅等级自动决定，无需手动配置：
 
-### Mode A：`dedicated`（独占，默认）— 一用户一实例
+### 免费用户 → 共享 OpenClaw（注册即用）
 
-每个用户对应自己的 OpenClaw 实例。用户在 AI 记忆中配置自己的实例地址：
+自动接入平台统一部署的 OpenClaw 实例（`OPENCLAW_URL`），
+通过 `agentId = aia_{userId}` 在实例内逻辑隔离，零配置。
 
-| 记忆 key | 说明 |
-|----------|------|
-| `_openclaw_url` | 用户自己的 OpenClaw 地址，如 `http://my-server:18789` |
-| `_openclaw_token` | 对应实例的认证 token（可选） |
+### 付费用户 → 独占 OpenClaw（专属实例）
 
-未配置时，回退到全局 `OPENCLAW_URL`。
+升级付费后，通过 API 注册自己的 OpenClaw 实例地址：
 
-**适合：** 企业私有化、用户自持服务器、强数据隔离场景。
+```bash
+# 配置专属 OpenClaw 实例
+curl -X PUT http://localhost:3000/api/openclaw/config \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "http://my-server:18789", "token": "my-token"}'
 
-### Mode B：`shared`（共享）— 多用户共享一实例
-
-一个 OpenClaw 实例服务所有用户，通过 `agentId = aia_{userId}` 区分：
-
-```
-用户 A ─┐
-用户 B ─┼─→ 后端 → 单个 OpenClaw 实例 → AI
-用户 C ─┘     user: "aia_{userId}"
-              X-OpenClaw-Agent: "aia_{userId}"
+# 查看当前接入状态
+curl http://localhost:3000/api/openclaw/status \
+  -H "Authorization: Bearer <token>"
 ```
 
-**适合：** SaaS 多租户、资源受限、快速部署场景。
+升级时，`POST /api/subscription/upgrade` 响应中包含 `openclaw.setupRequired` 字段，
+前端据此展示配置引导界面。
+
+| 接口 | 说明 |
+|------|------|
+| `GET /api/openclaw/status` | 查看当前模式、是否需要配置 |
+| `PUT /api/openclaw/config` | 配置专属实例地址（`{ url, token }`） |
+| `DELETE /api/openclaw/config` | 解除专属配置，回退共享 |
 
 ---
 
@@ -172,11 +176,12 @@ cp frontend/index.html VoiceTaskApp/app/src/main/assets/www/
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `OPENCLAW_URL` | ✅ | OpenClaw 服务地址，如 `http://192.168.1.x:18789` |
+| `OPENCLAW_URL` | ✅ | 平台共享 OpenClaw 地址（免费用户使用），如 `http://192.168.1.x:18789` |
 | `OPENCLAW_TOKEN` | ⚡ | 认证 token，`gateway.auth.mode` 开启时需要 |
-| `OPENCLAW_MODE` | - | `dedicated`（默认）或 `shared` |
 | `OPENCLAW_DEFAULT_MODEL` | - | 默认路由模型，默认 `deepseek-chat` |
 | `OPENCLAW_EMBED_MODEL` | - | 向量化模型，默认 `text-embedding-3-small` |
+
+> 模式（shared/dedicated）由用户订阅等级自动决定，不再需要 `OPENCLAW_MODE`。
 
 > AI Provider Keys（DeepSeek / OpenAI / Claude）在 **OpenClaw 侧**配置，后端无需持有。
 
