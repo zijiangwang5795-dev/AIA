@@ -597,12 +597,12 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
 
       <!-- Voice Hero -->
       <div class="voice-hero" onclick="gp('voice')">
-        <div class="vh-label">🎙️ 语音助手</div>
+        <div class="vh-label">🎯 智能任务识别</div>
         <div class="vh-main">
           <button class="mic-bubble" id="homeMic" onclick="event.stopPropagation();quickRec()">🎙️</button>
           <div class="vh-text">
-            <div class="vh-title">点击开口说话</div>
-            <div class="vh-hint">告诉我你要做什么，我来帮你安排任务和日程</div>
+            <div class="vh-title">点击麦克风开始录音</div>
+            <div class="vh-hint">说出待办事项，录音完成后 AI 自动识别并创建任务</div>
             <div class="vh-status" id="homeRecStatus">准备就绪 ·</div>
           </div>
         </div>
@@ -612,8 +612,8 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <!-- Quick shortcuts -->
       <div class="shortcuts">
         <div class="sc" onclick="gp('voice')">
-          <div class="sc-ic">🎙️</div>
-          <div class="sc-nm hot">录音分析</div>
+          <div class="sc-ic">🎯</div>
+          <div class="sc-nm hot">任务识别</div>
         </div>
         <div class="sc" onclick="gp('tasks')">
           <div class="sc-ic">✅</div>
@@ -698,9 +698,13 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
 
     <!-- ═══ VOICE ═══ -->
     <div class="page" id="page-voice">
+      <div class="subpage-back" onclick="gp('skills')">‹ 技能</div>
       <div class="voice-page-hero">
-        <div class="vp-title">语音助手</div>
-        <div class="vp-sub">说出你想要做的事情</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px">
+          <span style="font-size:24px">🎯</span>
+          <div class="vp-title">智能任务识别</div>
+        </div>
+        <div class="vp-sub">语音录入或文字输入，AI 自动识别并创建任务</div>
         <div id="speechBanner" style="display:none;margin-top:10px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;color:var(--ok);background:rgba(61,255,160,.1);border:1px solid rgba(61,255,160,.2)">🎤 语音识别就绪 · 实时转文字</div>
         <div id="speechUnsupported" style="display:none;margin-top:10px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;color:var(--wn);background:rgba(255,208,96,.1);border:1px solid rgba(255,208,96,.2)">⚠️ 请在 Chrome 中打开以使用语音识别</div>
       </div>
@@ -782,14 +786,26 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <div class="pghead">
         <div><div class="pgtitle">技能中心</div><div class="pgsub">选择技能，让助手一键执行</div></div>
       </div>
-
-      <div class="card skill-run-card" id="skRunCard">
-        <div class="ctitle" id="skRunT">运行中...</div>
-        <div class="alog" id="skLog" style="min-height:120px"></div>
-        <div class="pbar" style="margin-top:10px"><div class="pfill" id="skProg" style="width:0%"></div></div>
-      </div>
-
       <div id="skList" style="margin-bottom:80px"></div>
+    </div>
+
+    <!-- ═══ SKILL EXECUTION PAGE ═══ -->
+    <div class="page" id="page-skill-run">
+      <div class="subpage-back" onclick="gp('skills')">‹ 技能</div>
+      <div class="pad" style="padding-top:8px">
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--bd)">
+          <div style="font-size:44px;line-height:1" id="srEmoji">⚡</div>
+          <div>
+            <div style="font-size:20px;font-weight:900;letter-spacing:-.4px" id="srName">技能</div>
+            <div style="font-size:13px;color:var(--t2);margin-top:4px;line-height:1.5" id="srDesc"></div>
+          </div>
+        </div>
+        <div class="card skill-run-card" id="skRunCard" style="margin-bottom:80px">
+          <div class="ctitle" id="skRunT">运行中...</div>
+          <div class="alog" id="skLog" style="min-height:160px"></div>
+          <div class="pbar" style="margin-top:10px"><div class="pfill" id="skProg" style="width:0%"></div></div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ MORE ═══ -->
@@ -1403,7 +1419,6 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
   <!-- BOTTOM NAV -->
   <div class="botnav">
     <div class="nb active" id="nb-home" onclick="gp('home')"><div class="ni">🏠</div><div class="nl">主页</div></div>
-    <div class="nb" id="nb-voice" onclick="gp('voice')"><div class="ni">🎙️</div><div class="nl">语音</div></div>
     <div class="nb" id="nb-tasks" onclick="gp('tasks')"><div class="ni">✅</div><div class="nl">任务</div><div class="nbadge" id="tbadge">3</div></div>
     <div class="nb" id="nb-friends" onclick="gp('friends')"><div class="ni">👥</div><div class="nl">好友</div><div class="nbadge" id="fbadge" style="display:none">1</div></div>
     <div class="nb" id="nb-market" onclick="gp('market')"><div class="ni">🛒</div><div class="nl">市场</div></div>
@@ -1452,7 +1467,7 @@ const RULES=[
 ];
 const SKILLS=[
   {id:'ai-news',e:'📰',n:'AI 新闻整理',d:'搜索今日前10条AI新闻，按热度排序并创建任务',t:['web_search','create_tasks','save_memory'],bt:'ai-news',color:'rgba(61,255,212,.08)'},
-  {id:'analyze',e:'🎙️',n:'语音分析',d:'分析语音内容，提取所有任务和待办事项',t:['create_tasks','memory_search','save_memory'],bt:'analyze-voice',color:'rgba(124,111,255,.1)'},
+  {id:'analyze',e:'🎯',n:'智能任务识别',d:'语音录入或文字输入，AI 自动识别并创建任务',t:['create_tasks','memory_search','save_memory'],bt:'analyze-voice',color:'rgba(124,111,255,.1)'},
   {id:'brief',e:'📋',n:'智能日报',d:'根据今日任务清单自动生成工作日报',t:['memory_search'],bt:'daily-brief',color:'rgba(245,200,66,.07)'},
   {id:'deep',e:'🔬',n:'深度分析',d:'多步推理，适合需要深度思考的复杂场景',t:['web_search','save_memory'],bt:'deep-analysis',color:'rgba(255,107,157,.08)'},
   {id:'calc',e:'🧮',n:'智能计算',d:'处理数值计算、数据汇总等任务',t:['calculator'],bt:'analyze',color:'rgba(77,160,255,.08)'},
@@ -1598,8 +1613,9 @@ function updateGreeting(){
 }
 
 // ══════════════════ NAV
-const ROOT_PG=['home','voice','tasks','friends','market','more'];
+const ROOT_PG=['home','tasks','friends','market','more'];
 const FRIEND_PGS=['chat','friend-profile','privacy'];
+const SKILL_PGS=['voice','skill-run'];
 function gp(pg){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
@@ -1609,6 +1625,7 @@ function gp(pg){
   if(ROOT_PG.includes(pg)) nbKey=pg;
   else if(['mdetail','publish'].includes(pg)) nbKey='market';
   else if(FRIEND_PGS.includes(pg)) nbKey='friends';
+  else if(SKILL_PGS.includes(pg)) nbKey='home'; // voice/skill-run: highlight home
   else nbKey='more';
   const nb=document.getElementById(`nb-${nbKey}`);
   if(nb)nb.classList.add('active');
@@ -2391,8 +2408,12 @@ async function loadSkillsFromBackend() {
 
 function rskills() {
   const items = SKILLS_DATA.length ? SKILLS_DATA : SKILLS;
-  document.getElementById('skList').innerHTML = items.map(s => `
-    <div class="skill-big" onclick="runSk('${s.id || s.builtin_type}')" style="--sk-color:${s.color || 'rgba(124,111,255,.1)'}">
+  document.getElementById('skList').innerHTML = items.map(s => {
+    const skId = s.id || s.builtin_type || '';
+    const isAnalyze = skId === 'analyze' || s.bt === 'analyze-voice';
+    const onclick = isAnalyze ? "gp('voice')" : `openSkillRun('${skId}')`;
+    return `
+    <div class="skill-big" onclick="${onclick}" style="--sk-color:${s.color || 'rgba(124,111,255,.1)'}">
       <div class="sb-emoji">${s.emoji || s.e || '⚡'}</div>
       <div class="sb-body">
         <div class="sb-name">${s.name || s.n}</div>
@@ -2400,7 +2421,23 @@ function rskills() {
         <div class="sb-tags">${(s.allowed_tools || s.t || []).map(x => `<span class="tag tp">${x}</span>`).join('')}</div>
       </div>
       <div class="sb-arr">›</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+
+function openSkillRun(id) {
+  const sk = SKILLS_DATA.find(s => s.id === id || s.builtin_type === id)
+          || SKILLS.find(s => s.id === id || s.bt === id);
+  if (!sk) return;
+  document.getElementById('srEmoji').textContent = sk.emoji || sk.e || '⚡';
+  document.getElementById('srName').textContent = sk.name || sk.n;
+  document.getElementById('srDesc').textContent = sk.description || sk.d;
+  document.getElementById('skRunT').textContent = `${sk.emoji||sk.e||'⚡'} ${sk.name||sk.n} 执行中...`;
+  document.getElementById('skLog').innerHTML = '';
+  document.getElementById('skProg').style.width = '0%';
+  document.getElementById('skRunCard').style.display = 'block';
+  gp('skill-run');
+  sl(150).then(() => runSk(id));
 }
 
 // 执行技能（SSE 流式）
@@ -2489,7 +2526,10 @@ async function runSk(id) {
   }
 }
 
-async function quickRunSkill(id) { gp('skills'); await sl(100); runSk(id); }
+function quickRunSkill(id) {
+  if (id === 'analyze') { gp('voice'); return; }
+  openSkillRun(id);
+}
 
 // 演示模式 skill steps（后端不可用时）
 function bss(sk) {
