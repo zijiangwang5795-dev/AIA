@@ -268,6 +268,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_searchable   BOOLEAN      DEFAULT 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login      TIMESTAMPTZ;
 
 -- ── 商业化增量迁移 ────────────────────────────────────
+-- 管理员标志（/admin/* 权限后备校验）
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE;
 -- Stripe Customer ID（与 Stripe 账户关联，避免重复创建 Customer）
 ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(50);
 -- Stripe Price ID（plans 表：每个计划对应 Stripe 中的 Price 对象）

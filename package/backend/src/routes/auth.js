@@ -138,7 +138,9 @@ module.exports = async function authRoutes(app) {
   });
 
   // ── Demo 快速登录（开发用）────────────────────────
-  app.post('/demo-login', async (req, reply) => {
+  app.post('/demo-login', {
+    config: { rateLimit: { max: 20, timeWindow: '10 minutes', keyGenerator: (req) => `demo:${req.ip}` } },
+  }, async (req, reply) => {
     if (process.env.DEMO_MODE !== 'true') {
       return reply.code(403).send({ error: 'Demo mode is disabled' });
     }
@@ -303,7 +305,9 @@ module.exports = async function authRoutes(app) {
   // ── 微信 OAuth：获取授权 URL ──────────────────────
   // GET /auth/wechat/url          → 登录（无需认证）
   // GET /auth/wechat/url?bind=1   → 绑定到已登录账号（需要 JWT）
-  app.get('/wechat/url', async (req, reply) => {
+  app.get('/wechat/url', {
+    config: { rateLimit: { max: 20, timeWindow: '10 minutes', keyGenerator: (req) => `wx_url:${req.ip}` } },
+  }, async (req, reply) => {
     const appId  = process.env.WECHAT_APP_ID;
     const secret = process.env.WECHAT_SECRET;
     if (!appId || !secret) {
@@ -344,7 +348,9 @@ module.exports = async function authRoutes(app) {
   });
 
   // ── 微信 OAuth：回调处理 ───────────────────────────
-  app.get('/wechat/callback', async (req, reply) => {
+  app.get('/wechat/callback', {
+    config: { rateLimit: { max: 30, timeWindow: '10 minutes', keyGenerator: (req) => `wx_cb:${req.ip}` } },
+  }, async (req, reply) => {
     const { code, state } = req.query;
     const frontendUrl = process.env.FRONTEND_URL ||
       process.env.BACKEND_URL ||
