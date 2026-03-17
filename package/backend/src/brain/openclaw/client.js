@@ -216,4 +216,62 @@ async function createEmbedding(text, userId) {
   return res.data[0].embedding;
 }
 
-module.exports = { callOpenClaw, createEmbedding, isOpenClawConfigured, getOpenClawConfig, resolveUserConfig };
+// ── 同步用户助手属性到 OpenClaw Agent 配置 ────────────
+/**
+ * 将后端「静态人格属性」推送到 OpenClaw，使 Agent 持久化
+ * 用户的助手设定，无需每次请求重传完整 persona。
+ *
+ * 触发时机：用户更新 profile（名称/天赋/自定义人格/偏好模型）
+ *
+ * 属性映射：
+ *   assistant_name  → OpenClaw agent.name
+ *   assistant_emoji → OpenClaw agent.avatar
+ *   talent 层 prompt→ OpenClaw agent.persona（静态部分）
+ *   soul_prompt     → OpenClaw agent.persona 扩展
+ *   preferred_model → OpenClaw agent.model
+ *   display_name    → OpenClaw agent.persona 中的用户称谓
+ *
+ * 注意：动态部分（时间/任务数/记忆）仍通过每次请求的
+ * system prompt 注入，不存入 OpenClaw 配置。
+ *
+ * @param {string} userId
+ * @param {object} opts
+ * @param {string} opts.staticPersona  - 已组装好的静态 persona（soul + talent）
+ * @param {string} opts.assistantName  - 助手名称
+ * @param {string} [opts.assistantEmoji] - 助手头像 emoji
+ * @param {string} [opts.model]        - 偏好模型名
+ */
+async function syncAgentConfig(userId, { staticPersona, assistantName, assistantEmoji, model }) {
+  if (!isOpenClawConfigured()) return;
+
+  const resolved = await resolveUserConfig(userId);
+  const agentId  = resolved.agentId || `aia_${userId}`;   // shared 模式用 agentId，dedicated 模式用 default agent
+
+  const payload = {
+    name:    assistantName || 'AI 助手',
+    avatar:  assistantEmoji || '🤖',
+    persona: staticPersona || '',
+    ...(model ? { model } : {}),
+  };
+
+  try {
+    const axios = require('axios');
+    // OpenClaw Agent 配置端点（PUT 幂等更新）
+    await axios.put(
+      `${resolved.url}/api/agents/${agentId}`,
+      payload,
+      {
+        headers: {
+          'Authorization': `Bearer ${resolved.token}`,
+          'Content-Type':  'application/json',
+          ...(resolved.agentId ? { 'X-OpenClaw-Agent': resolved.agentId } : {}),
+        },
+        timeout: 5000,
+      }
+    );
+  } catch {
+    // 同步失败不阻断主流程（OpenClaw 可能未支持此端点）
+  }
+}
+
+module.exports = { callOpenClaw, createEmbedding, isOpenClawConfigured, getOpenClawConfig, resolveUserConfig, syncAgentConfig };

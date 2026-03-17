@@ -336,7 +336,56 @@ SSE 流式返回 text chunks + tool_calls
 | 请求附带 user 字段 | 否 | `aia_{userId}` |
 | 数据隔离方式 | 物理隔离（不同实例） | 逻辑隔离（agentId 分区） |
 
-#### 1.3.2 迁移到 OpenClaw 的 AI 功能
+#### 1.3.2 助手属性 → OpenClaw Agent 配置映射
+
+后端助手属性分为**静态**（可预存到 OpenClaw）和**动态**（每次请求注入）两类：
+
+| 后端属性 | DB 字段 | 性质 | OpenClaw 对应 | 同步时机 |
+|----------|---------|------|--------------|---------|
+| 助手名称 | `assistant_name` | **静态** | `agent.name` | profile 更新时 |
+| 助手头像 | `assistant_emoji` | **静态** | `agent.avatar` | profile 更新时 |
+| 天赋/职业 | `talent` | **静态** | `agent.persona`（talent 层） | profile 更新时 |
+| 自定义人格 | `soul_prompt` | **静态** | `agent.persona`（soul 扩展） | profile 更新时 |
+| 偏好模型 | `preferred_model` | **静态** | `agent.model` | profile 更新时 |
+| 核心灵魂提示词 | 代码内置 | **静态** | `agent.persona`（soul 层） | profile 更新时 |
+| 用户姓名称谓 | `display_name` | 半静态 | `agent.persona` 称谓 | profile 更新时 |
+| 当前时间/时段 | 运行时计算 | **动态** | 每次请求 system prompt | 每次请求 |
+| 待处理任务数 | DB 查询 | **动态** | 每次请求 system prompt | 每次请求 |
+| 长期记忆 | `user_memories` | **动态** | 每次请求 system prompt | 每次请求 |
+| 情节记忆 | `episodic_memories` | **动态** | 每次请求 system prompt | 每次请求 |
+
+**静态属性同步流程（`PUT /auth/profile` 触发）：**
+
+```
+用户更新 profile（名称/天赋/人格/模型）
+    ↓ 写入 DB
+buildStaticPersona(user)   ← soul + talent + soul_prompt 组合
+    ↓ setImmediate（异步，不阻断响应）
+syncAgentConfig(userId, { staticPersona, assistantName, assistantEmoji, model })
+    ↓
+PUT http://openclaw/api/agents/{agentId}
+    { name, avatar, persona, model }
+```
+
+- **dedicated 模式**：`agentId = aia_{userId}`，指向用户专属实例的 default agent
+- **shared 模式**：`agentId = aia_{userId}`，在共享实例中创建/更新对应 agent
+
+**动态部分仍每次请求注入（`assembleSystemPrompt`）：**
+
+```
+POST /api/analyze
+    ↓
+buildRuntimeContext()   ← 当前时间、时段、待办数
+buildMemoryContext()    ← 长期记忆 k-v
+searchEpisodicMemory()  ← 语义相似历史经验
+    ↓
+完整 system prompt = 静态 persona + 动态上下文 → callOpenClaw()
+```
+
+> **未来优化方向**：静态 persona 已持久化到 OpenClaw 后，每次请求只需传动态部分，
+> 由 OpenClaw 内部合并 agent 配置 + 动态上下文，减少每次请求 payload 大小。
+
+#### 1.3.4 迁移到 OpenClaw 的 AI 功能
 
 | 功能 | 迁移前 | 迁移后 |
 |------|--------|--------|
@@ -345,7 +394,7 @@ SSE 流式返回 text chunks + tool_calls
 | Embedding 向量化 | 直接调 OpenAI | 经 OpenClaw `/v1/embeddings` |
 | API Key 存放位置 | 后端 `.env` | OpenClaw 侧配置 |
 
-#### 1.3.3 相关环境变量
+#### 1.3.5 相关环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|

@@ -2,6 +2,8 @@
 const { query } = require('../db/client');
 const bcrypt = require('bcryptjs');
 const { v4: uuid } = require('uuid');
+const { syncAgentConfig } = require('../brain/openclaw/client');
+const { buildStaticPersona } = require('../personality/assembler');
 
 module.exports = async function authRoutes(app) {
 
@@ -176,6 +178,27 @@ module.exports = async function authRoutes(app) {
       [req.user.sub, displayName, avatarEmoji, talent, soulPrompt, assistantName, assistantEmoji, preferredModel, isSearchable]
     );
     const u = res.rows[0];
+
+    // 静态人格属性有变更时，异步同步到 OpenClaw Agent 配置
+    // 仅在 assistantName / talent / soulPrompt / preferredModel / assistantEmoji 任一字段更新时触发
+    if (assistantName !== undefined || talent !== undefined || soulPrompt !== undefined ||
+        preferredModel !== undefined || assistantEmoji !== undefined) {
+      const staticPersona = buildStaticPersona({
+        assistantName: u.assistant_name || 'AI 助手',
+        talent:        u.talent || 'default',
+        soulPrompt:    u.soul_prompt,
+        displayName:   u.display_name,
+      });
+      setImmediate(() =>
+        syncAgentConfig(u.id, {
+          staticPersona,
+          assistantName:  u.assistant_name || 'AI 助手',
+          assistantEmoji: u.assistant_emoji || '🤖',
+          model:          u.preferred_model,
+        }).catch(() => {})
+      );
+    }
+
     return {
       id: u.id,
       displayName: u.display_name,
