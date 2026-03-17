@@ -142,4 +142,25 @@ async function assembleSystemPrompt(userId, userInput = '') {
     .join('\n\n---\n\n');
 }
 
-module.exports = { assembleSystemPrompt, buildSoul, TALENTS };
+// ── 静态人格组装（同步到 OpenClaw Agent 配置用）────────
+/**
+ * 只包含「不随请求变化」的部分：soul + talent + soul_prompt。
+ * 用于 profile 更新时推送到 OpenClaw，避免每次请求重传完整 persona。
+ *
+ * 不包含：运行时状态（时间/任务数）、记忆（长期/情节）。
+ *
+ * @param {object} user  来自 DB 的 users 记录
+ * @param {string} user.assistantName
+ * @param {string} user.talent
+ * @param {string} [user.soulPrompt]
+ * @param {string} [user.displayName]
+ */
+function buildStaticPersona(user) {
+  const name    = user.assistantName || 'AI 助手';
+  const soul    = buildSoul(name);
+  const talent  = TALENTS[user.talent] || TALENTS['default'];
+  const custom  = user.soulPrompt ? `\n\n## 用户自定义人格补充\n${user.soulPrompt}` : '';
+  return [soul, talent, custom].filter(Boolean).join('\n\n---\n\n');
+}
+
+module.exports = { assembleSystemPrompt, buildStaticPersona, buildSoul, TALENTS };

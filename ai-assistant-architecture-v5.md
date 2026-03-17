@@ -282,61 +282,115 @@ SSE 流式返回 text chunks + tool_calls
 后端中继给前端 SSE 连接
 ```
 
-#### 1.3.1 两种部署模式（`OPENCLAW_MODE`）
+#### 1.3.1 产品形态：按订阅等级自动路由
 
-系统支持两种 OpenClaw 接入模式，通过 `OPENCLAW_MODE` 环境变量切换：
+模式选择**不依赖全局配置**，由后端根据用户的订阅等级在运行时自动决定：
 
----
-
-**Mode A：`dedicated`（独占模式，默认）**
-
-每个用户接入自己专属的 OpenClaw 实例。
-
-```
-用户 A → 后端 → OpenClaw 实例 A（http://serverA:18789）→ AI
-用户 B → 后端 → OpenClaw 实例 B（http://serverB:18789）→ AI
-用户 C → 后端 → 全局 OpenClaw（回退，用户未配置时）→ AI
-```
-
-- 用户将自己的实例地址存储在长期记忆中（`_openclaw_url` / `_openclaw_token`）
-- 后端 `resolveUserConfig(userId)` 先查 DB，查不到则回退全局 `OPENCLAW_URL`
-- 数据完全隔离，用户可自定义模型、工具、Prompt
-
-**适用场景：** 企业私有化部署 · 用户自持服务器 · 强隔离需求
+| 用户类型 | OpenClaw 模式 | 说明 |
+|----------|--------------|------|
+| **免费用户**（free plan） | `shared`（共享） | 注册即用，自动接入平台共享实例，`agentId = aia_{userId}` 隔离 |
+| **付费用户**（paid plan）| `dedicated`（独占） | 可配置专属 OpenClaw 实例；未配置时暂用共享，前端提示引导配置 |
 
 ---
 
-**Mode B：`shared`（共享模式）**
-
-多个用户共享同一个 OpenClaw 实例，用 `agentId` 区分。
+**免费用户 → 共享 OpenClaw**
 
 ```
-用户 A ─┐
-用户 B ─┼─→ 后端 → OpenClaw 实例（http://server:18789）→ AI
-用户 C ─┘        user: "aia_{userId}"  X-OpenClaw-Agent: "aia_{userId}"
+用户 A（free）─┐
+用户 B（free）─┼─→ 后端 → 平台共享 OpenClaw（OPENCLAW_URL）→ AI
+用户 C（free）─┘     user: "aia_{userId}"
+                     X-OpenClaw-Agent: "aia_{userId}"
 ```
 
-- 全局唯一 `OPENCLAW_URL`，所有请求走同一实例
-- 每个用户的 `agentId = aia_{userId}` 通过两个渠道传递：
-  - `user` 字段（OpenAI 标准字段，OpenClaw 用此做 session 路由）
-  - `X-OpenClaw-Agent` 请求头（OpenClaw 扩展头）
-- OpenClaw 根据 agentId 维护独立的 session 历史与配置
+- 平台部署一个 OpenClaw 实例，`OPENCLAW_URL` 指向它
+- 每个免费用户通过 `agentId = aia_{userId}` 在实例内逻辑隔离
+- 零配置，注册即用
 
-**适用场景：** SaaS 多租户 · 资源受限 · 快速上线
+---
+
+**付费用户 → 独占 OpenClaw**
+
+```
+用户 D（paid）─→ 后端 → 用户自己的 OpenClaw（_openclaw_url）→ AI
+用户 E（paid）─→ 后端 → 用户自己的 OpenClaw（_openclaw_url）→ AI
+```
+
+- 用户通过 `PUT /api/openclaw/config` 注册自己的 OpenClaw 实例地址
+- 后端 `resolveUserConfig()` 读取 `user_memories._openclaw_url` 路由到专属实例
+- 数据物理隔离，用户可自定义模型、完整控制数据
 
 ---
 
 **配置对比：**
 
-| 配置项 | dedicated | shared |
-|--------|-----------|--------|
-| `OPENCLAW_URL` | 全局默认地址（用户可覆盖） | 全局唯一地址 |
-| `OPENCLAW_MODE` | `dedicated` | `shared` |
-| 用户专属 URL | `user_memories._openclaw_url` | — |
-| 请求附带 user 字段 | 否 | `aia_{userId}` |
-| 数据隔离方式 | 物理隔离（不同实例） | 逻辑隔离（agentId 分区） |
+| 维度 | shared（免费） | dedicated（付费） |
+|------|---------------|-----------------|
+| 接入方式 | 自动，无需配置 | 用户注册专属实例地址 |
+| OpenClaw 实例 | 平台共享 | 用户专属 |
+| 用户标识 | `agentId = aia_{userId}` | 整个实例归属该用户 |
+| 数据隔离 | 逻辑隔离（agentId 分区） | 物理隔离（不同实例） |
+| 模型控制 | 平台统一配置 | 用户自配置 |
 
-#### 1.3.2 迁移到 OpenClaw 的 AI 功能
+---
+
+**相关 API：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/openclaw/status` | 查看当前用户的接入状态及是否需要配置 |
+| `PUT` | `/api/openclaw/config` | 付费用户配置专属 OpenClaw 地址（`{ url, token }`） |
+| `DELETE` | `/api/openclaw/config` | 解除专属配置，回退共享实例 |
+
+#### 1.3.2 助手属性 → OpenClaw Agent 配置映射
+
+后端助手属性分为**静态**（可预存到 OpenClaw）和**动态**（每次请求注入）两类：
+
+| 后端属性 | DB 字段 | 性质 | OpenClaw 对应 | 同步时机 |
+|----------|---------|------|--------------|---------|
+| 助手名称 | `assistant_name` | **静态** | `agent.name` | profile 更新时 |
+| 助手头像 | `assistant_emoji` | **静态** | `agent.avatar` | profile 更新时 |
+| 天赋/职业 | `talent` | **静态** | `agent.persona`（talent 层） | profile 更新时 |
+| 自定义人格 | `soul_prompt` | **静态** | `agent.persona`（soul 扩展） | profile 更新时 |
+| 偏好模型 | `preferred_model` | **静态** | `agent.model` | profile 更新时 |
+| 核心灵魂提示词 | 代码内置 | **静态** | `agent.persona`（soul 层） | profile 更新时 |
+| 用户姓名称谓 | `display_name` | 半静态 | `agent.persona` 称谓 | profile 更新时 |
+| 当前时间/时段 | 运行时计算 | **动态** | 每次请求 system prompt | 每次请求 |
+| 待处理任务数 | DB 查询 | **动态** | 每次请求 system prompt | 每次请求 |
+| 长期记忆 | `user_memories` | **动态** | 每次请求 system prompt | 每次请求 |
+| 情节记忆 | `episodic_memories` | **动态** | 每次请求 system prompt | 每次请求 |
+
+**静态属性同步流程（`PUT /auth/profile` 触发）：**
+
+```
+用户更新 profile（名称/天赋/人格/模型）
+    ↓ 写入 DB
+buildStaticPersona(user)   ← soul + talent + soul_prompt 组合
+    ↓ setImmediate（异步，不阻断响应）
+syncAgentConfig(userId, { staticPersona, assistantName, assistantEmoji, model })
+    ↓
+PUT http://openclaw/api/agents/{agentId}
+    { name, avatar, persona, model }
+```
+
+- **dedicated 模式**：`agentId = aia_{userId}`，指向用户专属实例的 default agent
+- **shared 模式**：`agentId = aia_{userId}`，在共享实例中创建/更新对应 agent
+
+**动态部分仍每次请求注入（`assembleSystemPrompt`）：**
+
+```
+POST /api/analyze
+    ↓
+buildRuntimeContext()   ← 当前时间、时段、待办数
+buildMemoryContext()    ← 长期记忆 k-v
+searchEpisodicMemory()  ← 语义相似历史经验
+    ↓
+完整 system prompt = 静态 persona + 动态上下文 → callOpenClaw()
+```
+
+> **未来优化方向**：静态 persona 已持久化到 OpenClaw 后，每次请求只需传动态部分，
+> 由 OpenClaw 内部合并 agent 配置 + 动态上下文，减少每次请求 payload 大小。
+
+#### 1.3.4 迁移到 OpenClaw 的 AI 功能
 
 | 功能 | 迁移前 | 迁移后 |
 |------|--------|--------|
@@ -345,15 +399,16 @@ SSE 流式返回 text chunks + tool_calls
 | Embedding 向量化 | 直接调 OpenAI | 经 OpenClaw `/v1/embeddings` |
 | API Key 存放位置 | 后端 `.env` | OpenClaw 侧配置 |
 
-#### 1.3.3 相关环境变量
+#### 1.3.5 相关环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `OPENCLAW_URL` | 全局 OpenClaw 服务地址 | `http://localhost:18789` |
+| `OPENCLAW_URL` | 平台共享 OpenClaw 地址（免费用户使用） | `http://localhost:18789` |
 | `OPENCLAW_TOKEN` | 认证 token（auth.mode 启用时） | _(空)_ |
-| `OPENCLAW_MODE` | 部署模式 | `dedicated` |
 | `OPENCLAW_DEFAULT_MODEL` | 默认路由模型 | `deepseek-chat` |
 | `OPENCLAW_EMBED_MODEL` | 向量化模型名 | `text-embedding-3-small` |
+
+> `OPENCLAW_MODE` 已废弃：模式现由用户订阅等级自动决定（free=shared / paid=dedicated）。
 
 **降级策略：** 若 `OPENCLAW_URL` 未配置，后端自动降级为直接调用 `DEEPSEEK_API_KEY` / `OPENAI_API_KEY`（兼容旧部署）。
 
