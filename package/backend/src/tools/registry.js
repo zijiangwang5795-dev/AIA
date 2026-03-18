@@ -145,24 +145,40 @@ async function executeTool(name, args, context = {}) {
         };
       }
 
+      const axios = require('axios');
+
       // Tavily 搜索（推荐，专为 AI Agent 设计）
       if (process.env.TAVILY_API_KEY) {
-        const axios = require('axios');
-        const res = await axios.post('https://api.tavily.com/search', {
-          api_key: process.env.TAVILY_API_KEY,
-          query: args.query,
-          max_results: 5,
-          search_depth: 'basic',
-        });
-        return { results: res.data.results };
+        try {
+          const res = await axios.post('https://api.tavily.com/search', {
+            api_key: process.env.TAVILY_API_KEY,
+            query: args.query,
+            max_results: 5,
+            search_depth: 'basic',
+          });
+          return { results: res.data.results };
+        } catch (err) {
+          const status = err.response?.status;
+          if (status === 401 || status === 403) {
+            return { error: `搜索 API 鉴权失败（TAVILY_API_KEY 无效或已过期，HTTP ${status}），请在 .env 中更新 TAVILY_API_KEY。` };
+          }
+          throw err;
+        }
       }
 
       // Serper 搜索（Google 结果）
-      const axios = require('axios');
-      const res = await axios.post('https://google.serper.dev/search', {
-        q: args.query, gl: 'cn', hl: 'zh-cn', num: 5,
-      }, { headers: { 'X-API-KEY': process.env.SERPER_API_KEY } });
-      return { results: (res.data.organic || []).map(r => ({ title: r.title, snippet: r.snippet, url: r.link })) };
+      try {
+        const res = await axios.post('https://google.serper.dev/search', {
+          q: args.query, gl: 'cn', hl: 'zh-cn', num: 5,
+        }, { headers: { 'X-API-KEY': process.env.SERPER_API_KEY } });
+        return { results: (res.data.organic || []).map(r => ({ title: r.title, snippet: r.snippet, url: r.link })) };
+      } catch (err) {
+        const status = err.response?.status;
+        if (status === 401 || status === 403) {
+          return { error: `搜索 API 鉴权失败（SERPER_API_KEY 无效或已过期，HTTP ${status}），请在 .env 中更新 SERPER_API_KEY。` };
+        }
+        throw err;
+      }
     }
 
     case 'create_tasks': {
