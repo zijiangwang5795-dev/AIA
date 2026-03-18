@@ -30,11 +30,13 @@ app.register(require('@fastify/helmet'), {
   contentSecurityPolicy: isProd ? {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'"],
+      // SPA 使用内联 <script> 和 onclick= 事件处理器，必须允许 unsafe-inline
+      scriptSrc:      ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr:  ["'unsafe-inline'"],
       styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
       imgSrc:         ["'self'", 'data:', 'https:'],
-      connectSrc:     ["'self'"],
+      connectSrc:     ["'self'", 'wss:', 'ws:'],  // SSE / WebSocket
       frameSrc:       ["'none'"],
       objectSrc:      ["'none'"],
     },
