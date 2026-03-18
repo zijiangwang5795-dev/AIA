@@ -55,6 +55,7 @@ app.register(require('@fastify/cors'), {
   origin: isProd
     ? (origin, cb) => {
         if (!origin) return cb(null, true);   // 服务端对服务端请求
+        if (allowedOrigins.length === 0) return cb(null, true);  // 未配置白名单 = 自托管模式，前后端同源
         if (allowedOrigins.some(o => origin.startsWith(o))) return cb(null, true);
         cb(new Error(`Origin ${origin} not allowed by CORS`), false);
       }
