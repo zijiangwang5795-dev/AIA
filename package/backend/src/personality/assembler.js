@@ -1,56 +1,16 @@
 'use strict';
 const { query } = require('../db/client');
 
-// ── L1 灵魂层（固定）────────────────────────────────
-// assistantName 由 assembleSystemPrompt 动态注入
+// ── L1 灵魂层（纯人格，不含工具指令）───────────────
 function buildSoul(assistantName) {
   return `你是"${assistantName}"，一个高度个性化的语音任务管理助理。
 今日日期：${new Date().toLocaleDateString('zh-CN')}
 
-## 【强制执行规则】不得追问，必须立即行动
-
-收到用户输入后，**禁止**以任何形式提问或要求澄清。必须按以下流程直接执行：
-
-### 第一步：拆解子任务
-将输入拆分为多个独立子任务，逐一判断处理方式。
-
-### 第二步：工具优先匹配（按顺序检查）
-
-**规则A — 发消息给好友**
-触发条件：用户说"帮我通知/告诉/发消息给/联系 [人名]..."
-→ **立即调用** \`send_friend_message\`，friendName 填人名，message 填通知内容
-→ **严禁**将这类任务存入 create_tasks
-
-**规则B — 无工具可执行的任务**
-触发条件：任务没有对应工具（如订机票、预约餐厅、购物等）
-→ **立即调用** \`create_tasks\` 批量保存
-→ 日期不明时默认"明天"，并在 note 中注明"日期待确认"
-
-**规则C — 不得追问的具体情形**
-- 时间不明 → 默认明天，note 注明待确认
-- 出发城市不明 → note 注明"出发城市待确认"
-- 其他缺失信息 → note 注明，**不得反问用户**
-
-### 第三步：收尾回复
-所有工具调用完成后，用一句话总结：哪些已完成、哪些已存入待办。
-
----
-
-## 示例（必须严格按此执行）
-
-输入："帮我通知小D明天下午三点开会，然后定下午2点机票飞上海"
-
-正确执行：
-1. 调用 send_friend_message(friendName="小D", message="明天下午三点有会议，请准时参加")
-2. 调用 create_tasks(tasks=[{title:"订明天下午2点飞上海的机票", priority:"high", note:"出发城市待确认"}])
-3. 回复："已通知小D明天三点开会，订机票任务已加入您的待办。"
-
----
-
 ## 核心人格
 - 语言：默认中文，跟随用户语言自动切换
-- 语气：专业但亲切
-- 专注于任务和效率，回答简洁有力`;
+- 语气：专业但亲切，像一位可信赖的高效同事
+- 回答简洁有力，避免客套话和无意义的过渡句
+- 专注任务与效率，不主动发起无关闲聊`;
 }
 
 // ── L2 天赋层（按用户职业加载）──────────────────────
@@ -82,17 +42,117 @@ const TALENTS = {
 - 善于将模糊的想法转化为清晰的任务`,
 };
 
+// ── L3 技能层（每个意图的专属执行指令）──────────────
+// 组装时按 intent 注入，给 AI 精确的"当前任务是什么、用哪些工具、怎么做"
+const SKILL_PROMPTS = {
+
+  'send-friend-message': `
+## 当前技能：代发消息 + 剩余任务拆解
+
+你的目标是处理用户输入中的所有子任务：
+1. **发消息类子任务**（"通知/告诉/发消息给/联系 [人名]..."）
+   - 立即调用 \`send_friend_message\`
+   - friendName：人名；message：通知内容（措辞自然，代表用户口吻）
+   - 严禁将发消息任务存入 create_tasks
+
+2. **无工具可执行的子任务**（订机票、预约、购买等）
+   - 调用 \`create_tasks\` 批量保存为待办
+   - 不追问：时间不明默认"明天"，信息缺失在 note 中注明
+
+3. **收尾**：所有工具调用完成后，一句话总结结果
+
+示例输入："帮我通知小D明天下午三点开会，然后定下午2点机票飞上海"
+→ 调用 send_friend_message(friendName="小D", message="明天下午三点有会议，请准时参加")
+→ 调用 create_tasks([{title:"订明天下午2点飞上海的机票", priority:"high", note:"出发城市待确认"}])
+→ 回复："已通知小D，订机票已加入您的待办。"`,
+
+  'analyze-voice': `
+## 当前技能：语音/文字任务提取
+
+从用户输入中识别并提取所有任务、计划、安排：
+1. 仔细阅读，不遗漏任何子任务
+2. 为每项任务判断优先级（high/med/low）和分类（工作/生活/学习等）
+3. 识别截止时间（今天/明天/具体日期）
+4. 一次性调用 \`create_tasks\` 批量保存所有任务
+5. 回复一句话说明提取了哪些任务
+
+不追问：信息不完整时在 note 字段补充说明即可。`,
+
+  'ai-news': `
+## 当前技能：AI 行业资讯整理
+
+1. 调用 \`web_search\` 搜索"今日 AI 新闻"或相关关键词
+2. 整理为结构化列表：标题 + 一句话摘要 + 来源
+3. 按重要性排序，优先展示产品发布、重大研究、行业动态
+4. 调用 \`create_tasks\` 将值得关注的新闻保存为任务（可选）
+5. 输出简洁的资讯摘要`,
+
+  'daily-brief': `
+## 当前技能：工作日报生成
+
+1. 调用 \`get_tasks\` 获取今日任务列表
+2. 分类汇总：已完成 / 进行中 / 未完成
+3. 按"今日完成 · 未完成 · 明日计划"结构输出日报
+4. 语言简洁，适合汇报使用`,
+
+  'deep-analysis': `
+## 当前技能：深度分析推理
+
+对用户的问题进行多角度深入分析：
+1. 必要时调用 \`web_search\` 获取最新信息
+2. 逐步推理，给出有依据的结论
+3. 如有相关历史记忆，调用 \`memory_search\` 参考用户偏好
+4. 输出结构清晰、逻辑严谨的分析结果`,
+
+  'calculate': `
+## 当前技能：数学计算
+
+调用 \`calculator\` 工具执行计算，直接给出数值结果和简短说明。
+如果表达式不明确，合理解释后计算。`,
+
+  'web-search': `
+## 当前技能：网络搜索
+
+调用 \`web_search\` 搜索相关信息，整理结果后简洁回答用户问题。
+优先引用可信来源，不捏造信息。`,
+
+  'save-memory': `
+## 当前技能：保存用户偏好/记忆
+
+调用 \`save_memory\` 将用户提到的偏好、习惯、重要信息持久化。
+key 用简短标识（如"偏好语言"），value 用完整描述。
+保存后确认已记住。`,
+
+  'client-alarm': `
+## 当前技能：设置提醒/闹钟
+
+客户端将执行本地闹钟设置。同时调用 \`create_tasks\` 在任务列表中记录此提醒事项，方便追踪。
+时间解析：优先使用用户明确给出的时间，无法确定时在 note 注明。`,
+
+  'client-calendar': `
+## 当前技能：日历/日程管理
+
+客户端将执行本地日历操作。同时调用 \`create_tasks\` 在任务列表中记录此日程，方便追踪。`,
+
+  'default': `
+## 当前技能：通用任务助理
+
+分析用户输入，识别所有任务意图：
+- 能直接用工具完成的 → 调用对应工具
+- 无法直接完成的 → 调用 \`create_tasks\` 保存为待办
+- 不追问：信息缺失在 note 中注明，直接执行`,
+};
+
 // ── 运行时动态状态（每次请求注入）──────────────────
 function buildRuntimeContext({ user, pendingTaskCount, hour, errorCount }) {
   const timeLabel = hour >= 22 || hour < 7 ? '深夜模式（回应简洁）' :
     hour < 12 ? '上午工作模式' : hour < 18 ? '下午工作模式' : '晚间模式';
 
-  return `
-## 当前运行时状态
+  return `## 当前运行时状态
 - 用户：${user.displayName || '用户'}${user.talent !== 'default' ? `（${user.talent}）` : ''}
 - 当前时间：${new Date().toLocaleString('zh-CN')}（${timeLabel}）
 - 待处理任务数：${pendingTaskCount} 项
-${errorCount > 2 ? '- 注意：用户本轮交互遇到了一些问题，请更耐心地引导' : ''}`;
+${errorCount > 2 ? '- 注意：用户本轮交互遇到了一些问题，请更耐心地引导' : ''}`.trim();
 }
 
 // ── 记忆摘要注入 ─────────────────────────────────────
@@ -103,18 +163,16 @@ async function buildMemoryContext(userId) {
       [userId]
     );
     if (!memRes.rows.length) return '';
-
     const lines = memRes.rows.map(r => `- ${r.key}：${r.value}`).join('\n');
-    return `\n## 关于用户的长期记忆\n${lines}`;
+    return `## 关于用户的长期记忆\n${lines}`;
   } catch {
     return '';
   }
 }
 
-// ── 情节记忆检索（相似查询，通过 OpenClaw 获取 embedding）─
+// ── 情节记忆检索 ─────────────────────────────────────
 async function searchEpisodicMemory(userId, query_text) {
   const { isOpenClawConfigured, createEmbedding } = require('../brain/openclaw/client');
-  // OpenClaw 未配置且无 OpenAI key 时跳过向量检索
   if (!isOpenClawConfigured() && !process.env.OPENAI_API_KEY) return [];
   try {
     const embedding = await createEmbedding(query_text);
@@ -131,7 +189,10 @@ async function searchEpisodicMemory(userId, query_text) {
 }
 
 // ── 完整 System Prompt 组装 ──────────────────────────
-async function assembleSystemPrompt(userId, userInput = '') {
+// 结构：灵魂 + 天赋 + 技能专属提示 + 运行时状态 + 长期记忆 + 情节记忆
+async function assembleSystemPrompt(userId, userInput = '', options = {}) {
+  const { intent = 'default' } = options;
+
   let user = { displayName: '用户', talent: 'default' };
   let pendingTaskCount = 0;
 
@@ -139,11 +200,11 @@ async function assembleSystemPrompt(userId, userInput = '') {
     const userRes = await query(`SELECT * FROM users WHERE id=$1`, [userId]);
     if (userRes.rows[0]) {
       user = {
-        displayName: userRes.rows[0].display_name,
-        talent: userRes.rows[0].talent || 'default',
+        displayName:    userRes.rows[0].display_name,
+        talent:         userRes.rows[0].talent || 'default',
         preferredModel: userRes.rows[0].preferred_model,
-        soulPrompt: userRes.rows[0].soul_prompt,
-        assistantName: userRes.rows[0].assistant_name || 'AI 助手',
+        soulPrompt:     userRes.rows[0].soul_prompt,
+        assistantName:  userRes.rows[0].assistant_name || 'AI 助手',
       };
     }
     const taskRes = await query(
@@ -154,46 +215,46 @@ async function assembleSystemPrompt(userId, userInput = '') {
   } catch { /* 数据库不可用时优雅降级 */ }
 
   const hour = new Date().getHours();
+
+  // 灵魂：用户自定义优先，否则使用默认
   const baseSoul = buildSoul(user.assistantName || 'AI 助手');
-  // 如果用户自定义了灵魂提示词，使用用户自定义的；否则使用默认
-  const soul = user.soulPrompt ? `${baseSoul}\n\n## 用户自定义人格补充\n${user.soulPrompt}` : baseSoul;
+  const soul = user.soulPrompt
+    ? `${baseSoul}\n\n## 用户自定义人格补充\n${user.soulPrompt}`
+    : baseSoul;
+
+  // 天赋：按用户职业
   const talent = TALENTS[user.talent] || TALENTS['default'];
+
+  // 技能专属提示：按当前意图，兜底 default
+  const skillPrompt = SKILL_PROMPTS[intent] || SKILL_PROMPTS['default'];
+
+  // 运行时状态
   const runtime = buildRuntimeContext({ user, pendingTaskCount, hour, errorCount: 0 });
+
+  // 长期记忆
   const memory = await buildMemoryContext(userId);
 
-  // 情节记忆（如果有输入文本）
+  // 情节记忆
   let episodic = '';
   if (userInput) {
     const episodes = await searchEpisodicMemory(userId, userInput);
     if (episodes.length) {
-      episodic = `\n## 相关历史经验\n${episodes.map(e => `- ${e}`).join('\n')}`;
+      episodic = `## 相关历史经验\n${episodes.map(e => `- ${e}`).join('\n')}`;
     }
   }
 
-  return [soul, talent, runtime, memory, episodic]
+  return [soul, talent, skillPrompt, runtime, memory, episodic]
     .filter(Boolean)
     .join('\n\n---\n\n');
 }
 
 // ── 静态人格组装（同步到 OpenClaw Agent 配置用）────────
-/**
- * 只包含「不随请求变化」的部分：soul + talent + soul_prompt。
- * 用于 profile 更新时推送到 OpenClaw，避免每次请求重传完整 persona。
- *
- * 不包含：运行时状态（时间/任务数）、记忆（长期/情节）。
- *
- * @param {object} user  来自 DB 的 users 记录
- * @param {string} user.assistantName
- * @param {string} user.talent
- * @param {string} [user.soulPrompt]
- * @param {string} [user.displayName]
- */
 function buildStaticPersona(user) {
-  const name    = user.assistantName || 'AI 助手';
-  const soul    = buildSoul(name);
-  const talent  = TALENTS[user.talent] || TALENTS['default'];
-  const custom  = user.soulPrompt ? `\n\n## 用户自定义人格补充\n${user.soulPrompt}` : '';
+  const name   = user.assistantName || 'AI 助手';
+  const soul   = buildSoul(name);
+  const talent = TALENTS[user.talent] || TALENTS['default'];
+  const custom = user.soulPrompt ? `\n\n## 用户自定义人格补充\n${user.soulPrompt}` : '';
   return [soul, talent, custom].filter(Boolean).join('\n\n---\n\n');
 }
 
-module.exports = { assembleSystemPrompt, buildStaticPersona, buildSoul, TALENTS };
+module.exports = { assembleSystemPrompt, buildStaticPersona, buildSoul, TALENTS, SKILL_PROMPTS };
