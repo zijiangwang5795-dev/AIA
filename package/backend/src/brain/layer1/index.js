@@ -70,7 +70,8 @@ const SKILL_TOOL_MAP = {
   'client-calendar':['create_tasks'],   // 同时创建任务记录
   'client-call':    [],
   'client-sms':     [],
-  'send-friend-message': ['send_friend_message'],
+  // 发消息意图：同时带 create_tasks，以便将无法执行的其他子任务存入待办
+  'send-friend-message': ['send_friend_message', 'create_tasks', 'memory_search'],
   'default':        ['create_tasks', 'memory_search'],
 };
 
