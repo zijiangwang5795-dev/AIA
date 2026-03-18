@@ -36,7 +36,7 @@ async function runAgent({
   const runSteps = [];
   const sendAndRecord = (data) => {
     send(data);
-    if (['step', 'tool_start', 'tool_done', 'client_action', 'error', 'done'].includes(data.type)) {
+    if (['step', 'tool_start', 'tool_done', 'client_action', 'error', 'done', 'task_extract', 'text_result'].includes(data.type)) {
       runSteps.push({ ...data, _t: Date.now() - startTime });
     }
   };
@@ -87,6 +87,11 @@ async function runAgent({
     totalInputTokens  += result.usage?.prompt_tokens    || 0;
     totalOutputTokens += result.usage?.completion_tokens || 0;
 
+    // 记录本轮 AI 文本回复
+    if (result.text) {
+      sendAndRecord({ type: 'text_result', content: result.text, step });
+    }
+
     // 没有 Tool 调用 → 完成
     if (!result.finishWithTools || !result.toolCalls.length) {
       messages.push({ role: 'assistant', content: result.text });
@@ -126,9 +131,9 @@ async function runAgent({
 
       sendAndRecord({ type: 'tool_done', name: tc.name, result: toolResult });
 
-      // 任务提取事件
+      // 任务提取事件（记录到 runSteps 以便任务详情页展示）
       if (tc.name === 'create_tasks' && toolResult.tasks) {
-        send({ type: 'task_extract', tasks: toolResult.tasks, summary: toolResult.summary });
+        sendAndRecord({ type: 'task_extract', tasks: toolResult.tasks, summary: toolResult.summary });
       }
 
       messages.push({
