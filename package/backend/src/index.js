@@ -110,6 +110,7 @@ app.register(require('@fastify/static'), {
   root: path.join(__dirname, '../../frontend'),
   prefix: '/',
   decorateReply: true,
+  index: 'index.html',   // 根路径 / 直接返回 index.html
 });
 
 // SPA 回退：未匹配的路由返回 index.html
