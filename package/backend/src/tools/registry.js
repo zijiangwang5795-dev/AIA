@@ -24,7 +24,7 @@ const TOOL_DEFINITIONS = {
     type: 'function',
     function: {
       name: 'create_tasks',
-      description: '将提取出的任务批量保存到用户的任务清单中。',
+      description: '将提取出的任务批量保存。每项任务需标明由谁来完成：assignTo="user" 表示用户自己的待办，assignTo="assistant" 表示助手可以自动处理。',
       parameters: {
         type: 'object',
         properties: {
@@ -37,9 +37,10 @@ const TOOL_DEFINITIONS = {
                 priority: { type: 'string', enum: ['high', 'med', 'low'], description: '优先级' },
                 category: { type: 'string', description: '分类，如：工作、学习、生活' },
                 deadline: { type: 'string', description: '截止时间，如：今天、明天、下周五' },
-                note:     { type: 'string', description: '补充说明（可选）' },
+                note:     { type: 'string', description: '补充说明（可选），信息不完整时在此注明' },
+                assignTo: { type: 'string', enum: ['user', 'assistant'], description: '执行人：user=用户自己待办；assistant=助手自动处理' },
               },
-              required: ['title', 'priority'],
+              required: ['title', 'priority', 'assignTo'],
             },
           },
           summary: { type: 'string', description: '对本次提取的简短总结' },
@@ -166,16 +167,28 @@ async function executeTool(name, args, context = {}) {
 
     case 'create_tasks': {
       const tasks = args.tasks || [];
-      const created = [];
+      const userTodos = [];
+      const assistantTasks = [];
       for (const t of tasks) {
+        // assignTo='user' → 用户待办(source='manual')；其余 → 助手任务(source='agent')
+        const source = t.assignTo === 'user' ? 'manual' : 'agent';
         const res = await query(
           `INSERT INTO tasks (user_id, title, priority, category, deadline, source, run_id)
-           VALUES ($1,$2,$3,$4,$5,'agent',$6) RETURNING *`,
-          [userId, t.title, t.priority || 'med', t.category || 'general', t.deadline || null, runId || null]
+           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+          [userId, t.title, t.priority || 'med', t.category || 'general', t.deadline || null, source, runId || null]
         );
-        created.push(res.rows[0]);
+        const row = { id: res.rows[0].id, title: t.title, priority: t.priority || 'med', assignTo: t.assignTo || 'assistant' };
+        if (source === 'manual') userTodos.push(row);
+        else assistantTasks.push(row);
       }
-      return { created: created.length, tasks: created.map(t => ({ id: t.id, title: t.title, priority: t.priority })), summary: args.summary };
+      return {
+        created: tasks.length,
+        userTodos,
+        assistantTasks,
+        // 向后兼容：tasks 字段包含所有
+        tasks: [...userTodos, ...assistantTasks],
+        summary: args.summary,
+      };
     }
 
     case 'get_tasks': {
