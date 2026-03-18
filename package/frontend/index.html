@@ -19,8 +19,32 @@
   --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
   --r:18px;
 }
+/* ── 浅色主题 ── */
+[data-theme="light"]{
+  --bg:#f0f0f8;--s1:#ffffff;--s2:#f5f5fc;--s3:#eaeaf5;
+  --bd:#d8d8ee;--bd2:#c5c5e0;
+  --ac:#6b5fff;--ac2:rgba(107,95,255,.12);
+  --pk:#e8528a;--cy:#00c9a8;--gold:#d4a000;
+  --tx:#1a1a30;--t2:#55557a;--t3:#9999b8;
+  --ok:#1aae6e;--wn:#cc9900;--er:#cc2e52;
+}
+[data-theme="light"] body::before{
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%,rgba(107,95,255,.1) 0%,transparent 60%),
+    radial-gradient(ellipse 40% 30% at 90% 80%,rgba(0,200,168,.05) 0%,transparent 55%),
+    radial-gradient(ellipse 30% 25% at 10% 70%,rgba(232,82,138,.04) 0%,transparent 50%)}
+[data-theme="light"] body::after{display:none}
+[data-theme="light"] .topbar{background:rgba(255,255,255,.92);border-bottom-color:var(--bd)}
+[data-theme="light"] .botnav{background:rgba(255,255,255,.96);border-top-color:var(--bd)}
+[data-theme="light"] .alog{background:#f8f8fc}
+[data-theme="light"] .toast{background:var(--s1);box-shadow:0 8px 32px rgba(0,0,0,.12)}
+[data-theme="light"] .chat-input-bar{background:rgba(255,255,255,.96)}
+[data-theme="light"] #authScreen{background:var(--bg)}
+/* 主题切换按钮 */
+.theme-btn{width:32px;height:32px;border-radius:50%;background:var(--s2);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;transition:all .2s;flex-shrink:0}
+.theme-btn:active{transform:scale(.9)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased}
+html,body{height:100%;overflow:hidden;font-family:'Noto Sans SC',sans-serif;background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased;transition:background .25s,color .25s}
 
 /* BG atmosphere */
 body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
@@ -395,8 +419,13 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .skill-run-card{margin:0 0 12px;display:none}
 
 /* ── TASKS ── */
-.titem{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--bd)}
+.task-tabs{display:flex;gap:0;margin-bottom:14px;background:var(--s2);border-radius:14px;padding:4px;border:1px solid var(--bd)}
+.ttab{flex:1;padding:8px 4px;text-align:center;font-size:13px;font-weight:700;color:var(--t3);border-radius:10px;cursor:pointer;transition:all .18s;white-space:nowrap}
+.ttab.active{background:var(--ac);color:#fff;box-shadow:0 2px 12px rgba(124,111,255,.4)}
+.ttab.active-user{background:var(--pk);color:#fff;box-shadow:0 2px 12px rgba(255,107,157,.4)}
+.titem{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .12s;border-radius:0}
 .titem:last-child{border-bottom:none}
+.titem:active{background:var(--s2)}
 .tck{width:22px;height:22px;border-radius:7px;border:2px solid var(--bd2);cursor:pointer;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .15s;min-width:22px}
 .tck.done{background:var(--ok);border-color:var(--ok);color:#000;font-size:12px}
 .ttitle{font-size:15px;font-weight:600;line-height:1.4}
@@ -404,6 +433,19 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .tmeta{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap;align-items:center}
 .delbtn{background:none;border:none;color:var(--t3);font-size:20px;cursor:pointer;padding:2px 6px;border-radius:8px;min-height:36px;min-width:36px;display:flex;align-items:center;justify-content:center}
 .delbtn:active{background:rgba(255,77,112,.15);color:var(--er)}
+/* Task Detail Modal */
+.tdetail-overlay{position:fixed;inset:0;z-index:200;background:rgba(6,6,15,.85);backdrop-filter:blur(8px);display:flex;align-items:flex-end;justify-content:center}
+.tdetail-sheet{width:100%;max-width:480px;background:var(--s1);border-radius:24px 24px 0 0;border-top:1px solid var(--bd);padding:0 0 calc(20px + var(--sb));max-height:85vh;display:flex;flex-direction:column}
+.tdetail-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.tdetail-title{font-size:16px;font-weight:800}
+.tdetail-close{width:32px;height:32px;border-radius:50%;background:var(--s3);border:none;color:var(--t2);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.tdetail-body{overflow-y:auto;flex:1;padding:16px 20px}
+.tdetail-more{cursor:pointer;font-size:13px;color:var(--ac);font-weight:600;display:flex;align-items:center;gap:4px;margin-top:12px}
+.tdetail-extra{display:none;margin-top:10px;background:var(--s3);border-radius:12px;padding:12px;font-size:12px;color:var(--t2);line-height:1.8}
+.tdetail-extra.open{display:block}
+/* Recent item clickable */
+.recent-item{cursor:pointer;transition:background .12s}
+.recent-item:active{background:var(--s2)}
 
 /* ── MORE ── */
 .more-section-label{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--t3);margin:0 0 8px;padding:0 2px}
@@ -591,6 +633,7 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <div class="topbar-r">
       <div id="tierBadge" style="display:none;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s" onclick="openSubscriptionPage()"></div>
       <div class="online-pill" id="onlinePill">在线</div>
+      <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="切换主题">🌙</button>
       <div class="uav" id="uAv">U</div>
     </div>
   </div>
@@ -691,32 +734,10 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <!-- Recent activity -->
       <div class="section-hd" style="margin-top:8px">
         <div class="section-title">最近动态</div>
+        <div class="see-all" onclick="gp('agent');rTimeline()">全部 ›</div>
       </div>
-      <div class="card" style="margin:0 16px 80px;padding:0 0">
-        <div class="recent-item">
-          <div class="ri-icon ri-green">✅</div>
-          <div style="flex:1">
-            <div class="ri-title">分析语音提取任务</div>
-            <div class="ri-sub">提取了 3 项待办事项</div>
-          </div>
-          <div class="ri-right"><div class="ri-time">刚刚</div></div>
-        </div>
-        <div class="recent-item">
-          <div class="ri-icon ri-purple">🤖</div>
-          <div style="flex:1">
-            <div class="ri-title">Agent 自动运行</div>
-            <div class="ri-sub">AI 新闻整理 · 共 6 步</div>
-          </div>
-          <div class="ri-right"><div class="ri-time">1小时前</div></div>
-        </div>
-        <div class="recent-item">
-          <div class="ri-icon ri-pink">🎙️</div>
-          <div style="flex:1">
-            <div class="ri-title">语音输入</div>
-            <div class="ri-sub">录音 12s，识别率 98%</div>
-          </div>
-          <div class="ri-right"><div class="ri-time">昨天</div></div>
-        </div>
+      <div class="card" style="margin:0 16px 80px;padding:0 0" id="recentActivityCard">
+        <div class="empty-state" style="padding:24px 0"><div class="ei" style="font-size:28px">📊</div><p style="font-size:13px">暂无动态，开始使用助手吧</p></div>
       </div>
     </div>
 
@@ -783,13 +804,21 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <!-- ═══ TASKS ═══ -->
     <div class="page pad" id="page-tasks">
       <div class="pghead">
-        <div><div class="pgtitle">任务清单</div><div class="pgsub" id="tsub">3 项待处理</div></div>
+        <div>
+          <div class="pgtitle" id="taskPageTitle">我的任务</div>
+          <div class="pgsub" id="tsub">3 项待处理</div>
+        </div>
         <button class="btn bp" onclick="showAdd()" style="padding:10px 16px;font-size:13px">+ 新建</button>
       </div>
+      <!-- 任务分类标签 -->
+      <div class="task-tabs">
+        <div class="ttab active" id="ttab-agent" onclick="switchTaskTab('agent',this)">🤖 我的任务</div>
+        <div class="ttab" id="ttab-user" onclick="switchTaskTab('user',this)">📋 您的待办</div>
+      </div>
       <div class="card" id="addTaskCard">
-        <div class="ctitle">新建任务</div>
+        <div class="ctitle">新建待办</div>
         <div class="istack">
-          <input class="inp" id="newT" placeholder="任务标题">
+          <input class="inp" id="newT" placeholder="待办标题">
           <select class="inp" id="newP">
             <option value="high">🔴 高优先级</option>
             <option value="med" selected>🟡 中优先级</option>
@@ -846,8 +875,8 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
           <div class="mr-right">›</div>
         </div>
         <div class="more-row" onclick="gsp('agent');rTimeline()">
-          <div class="mr-icon mr-cyan">📋</div>
-          <div class="mr-body"><div class="mr-name">执行记录</div><div class="mr-sub">每次对话 & 技能执行时间线</div></div>
+          <div class="mr-icon mr-cyan">🤖</div>
+          <div class="mr-body"><div class="mr-name">助手动态</div><div class="mr-sub">我帮你做过的每一件事</div></div>
           <div class="mr-right">›</div>
         </div>
         <div class="more-row" onclick="gsp('memory')">
@@ -952,13 +981,13 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <div class="pad" style="padding-top:12px;padding-bottom:80px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <div>
-            <div class="pgtitle" style="margin-bottom:2px">执行记录</div>
-            <div class="pgsub">每次对话 & 技能执行的完整时间线</div>
+            <div class="pgtitle" style="margin-bottom:2px">助手动态</div>
+            <div class="pgsub">我帮你做过的每一件事</div>
           </div>
           <button class="btn bp" style="padding:8px 14px;font-size:13px" onclick="rTimeline()">🔄 刷新</button>
         </div>
         <div id="timelineList">
-          <div class="empty-state"><div class="ei">📋</div><p>暂无执行记录<br>语音输入或点击技能即可开始</p></div>
+          <div class="empty-state"><div class="ei">🤖</div><p>暂无动态记录<br>语音输入或点击技能即可开始</p></div>
         </div>
       </div>
     </div>
@@ -1494,11 +1523,24 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <div class="nb active" id="nb-home" onclick="gp('home')"><div class="ni">🏠</div><div class="nl">主页</div></div>
     <div class="nb" id="nb-tasks" onclick="gp('tasks')"><div class="ni">✅</div><div class="nl">任务</div><div class="nbadge" id="tbadge">3</div></div>
     <div class="nb" id="nb-friends" onclick="gp('friends')"><div class="ni">👥</div><div class="nl">好友</div><div class="nbadge" id="fbadge" style="display:none">1</div></div>
-    <div class="nb" id="nb-timeline" onclick="gp('agent');rTimeline()"><div class="ni">📋</div><div class="nl">记录</div></div>
+    <div class="nb" id="nb-timeline" onclick="gp('agent');rTimeline()"><div class="ni">🤖</div><div class="nl">动态</div></div>
     <div class="nb" id="nb-more" onclick="gp('more')"><div class="ni">⋯</div><div class="nl">更多</div></div>
   </div>
 
 </div><!-- /app -->
+
+<!-- ═══ TASK DETAIL MODAL ═══ -->
+<div class="tdetail-overlay" id="taskDetailModal" style="display:none" onclick="if(event.target===this)closeTaskDetail()">
+  <div class="tdetail-sheet">
+    <div class="tdetail-hd">
+      <div class="tdetail-title" id="tdTitle">任务详情</div>
+      <button class="tdetail-close" onclick="closeTaskDetail()">×</button>
+    </div>
+    <div class="tdetail-body">
+      <div id="tdContent"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ═══ FRIEND PICKER MODAL ═══ -->
 <div class="fpicker-overlay" id="friendPickerModal" style="display:none" onclick="if(event.target===this)hideFriendPicker()">
@@ -1555,13 +1597,14 @@ const RULES=[
   {name:'fallback',p:999,match:()=>true,model:'deepseek-chat',r:'默认兜底'},
 ];
 const SKILLS=[
-  {id:'ai-news',e:'📰',n:'AI 新闻整理',d:'搜索今日前10条AI新闻，按热度排序并创建任务',t:['web_search','create_tasks','save_memory'],bt:'ai-news',color:'rgba(61,255,212,.08)'},
-  {id:'analyze',e:'🎯',n:'智能任务识别',d:'语音录入或文字输入，AI 自动识别并创建任务',t:['create_tasks','memory_search','save_memory'],bt:'analyze-voice',color:'rgba(124,111,255,.1)'},
-  {id:'brief',e:'📋',n:'智能日报',d:'根据今日任务清单自动生成工作日报',t:['memory_search'],bt:'daily-brief',color:'rgba(245,200,66,.07)'},
-  {id:'deep',e:'🔬',n:'深度分析',d:'多步推理，适合需要深度思考的复杂场景',t:['web_search','save_memory'],bt:'deep-analysis',color:'rgba(255,107,157,.08)'},
-  {id:'calc',e:'🧮',n:'智能计算',d:'处理数值计算、数据汇总等任务',t:['calculator'],bt:'analyze',color:'rgba(77,160,255,.08)'},
-  {id:'custom',e:'✨',n:'自定义技能',d:'创建属于你的个人 Agent 技能',t:[],bt:'custom',color:'rgba(61,255,160,.06)'},
-  {id:'send-message',e:'💬',n:'发消息给好友',d:'选择好友直接跳转聊天；或语音说"通知张三…"让助手代发',t:['send_friend_message'],bt:'send-message',color:'rgba(255,107,157,.08)'},
+  {id:'ai-news',e:'📰',n:'AI 新闻整理',d:'搜索今日AI行业热点，整理前10条新闻并自动创建任务。触发词：搜索AI新闻、AI有什么新动态、今日科技资讯、整理行业资讯',t:['web_search','create_tasks','save_memory'],bt:'ai-news',color:'rgba(61,255,212,.08)'},
+  {id:'analyze',e:'🎯',n:'智能任务识别',d:'从语音或文字中提取并分类任务。触发词：记录一下、帮我记、分析我的待办、整理任务清单',t:['create_tasks','memory_search','save_memory'],bt:'analyze-voice',color:'rgba(124,111,255,.1)'},
+  {id:'brief',e:'📋',n:'智能日报',d:'读取今日任务列表，自动生成工作日报/周报摘要。触发词：生成日报、写工作总结、今天做了什么、生成工作报告',t:['memory_search','get_tasks'],bt:'daily-brief',color:'rgba(245,200,66,.07)'},
+  {id:'deep',e:'🔬',n:'深度分析',d:'多步推理分析复杂问题，支持联网搜索辅助。触发词：帮我分析、深度解读、解释一下、研究一下、评估一下',t:['web_search','save_memory'],bt:'deep-analysis',color:'rgba(255,107,157,.08)'},
+  {id:'calc',e:'🧮',n:'智能计算',d:'处理数值计算、数据汇总、统计分析。触发词：计算、算一下、统计、汇总数据、数值分析',t:['calculator'],bt:'analyze',color:'rgba(77,160,255,.08)'},
+  {id:'alarm',e:'⏰',n:'设置提醒',d:'设置系统闹钟或日历提醒事项。触发词：提醒我、定个闹钟、设置提醒、明天几点叫我',t:['set_alarm','add_calendar_event'],bt:'client-alarm',color:'rgba(245,200,66,.08)'},
+  {id:'custom',e:'✨',n:'自定义技能',d:'创建属于你的个人 Agent 技能，组合多种工具实现专属工作流',t:[],bt:'custom',color:'rgba(61,255,160,.06)'},
+  {id:'send-message',e:'💬',n:'发消息给好友',d:'选择好友直接跳转聊天，或通过语音让助手代发消息。触发词：通知…、告诉…、发消息给…、帮我联系…',t:['send_friend_message'],bt:'send-message',color:'rgba(255,107,157,.08)'},
 ];
 
 // ══════════════════ AUTH
@@ -2272,6 +2315,7 @@ async function loadTasksFromBackend() {
       deadline: t.deadline || '',
       status: t.status,
       source: t.source,
+      run_id: t.run_id || null,
     }));
     rtasks();
     rdash();
@@ -2524,29 +2568,37 @@ function confirmT() {
 
 // ══════════════════ TASKS UI
 function rtasks() {
-  const pd = S.tasks.filter(t => t.status === 'pending').length;
-  document.getElementById('tsub').textContent = `${pd} 项待处理 · 共 ${S.tasks.length} 项`;
-  document.getElementById('tbadge').textContent = pd;
+  // 按当前 tab 过滤
+  const isAgentTab = currentTaskTab === 'agent';
+  const filtered = S.tasks.filter(t => isAgentTab ? t.source === 'agent' : t.source !== 'agent');
+  const pd = filtered.filter(t => t.status === 'pending').length;
+  const total = S.tasks.filter(t => t.status === 'pending').length;
+  document.getElementById('tsub').textContent = isAgentTab
+    ? `${pd} 项运行中 · 共 ${filtered.length} 项`
+    : `${pd} 项待处理 · 共 ${filtered.length} 项`;
+  document.getElementById('tbadge').textContent = total;
 
-  if (!S.tasks.length) {
-    document.getElementById('taskList').innerHTML =
-      '<div class="empty-state"><div class="ei">🎉</div><p>没有任务<br>去录音让助手帮你创建吧</p></div>';
+  if (!filtered.length) {
+    const emptyMsg = isAgentTab
+      ? '<div class="empty-state"><div class="ei">🤖</div><p>暂无助手任务<br>点击技能让助手开始工作</p></div>'
+      : '<div class="empty-state"><div class="ei">📋</div><p>暂无待办事项<br>点击右上角「新建」添加</p></div>';
+    document.getElementById('taskList').innerHTML = emptyMsg;
     return;
   }
 
-  document.getElementById('taskList').innerHTML = S.tasks.map(t => `
-    <div class="titem">
-      <div class="tck ${t.status === 'done' ? 'done' : ''}" onclick="togT('${t.id}')">${t.status === 'done' ? '✓' : ''}</div>
+  document.getElementById('taskList').innerHTML = filtered.map(t => `
+    <div class="titem" onclick="openTaskDetail('${t.id}')">
+      <div class="tck ${t.status === 'done' ? 'done' : ''}" onclick="event.stopPropagation();togT('${t.id}')">${t.status === 'done' ? '✓' : ''}</div>
       <div style="flex:1">
         <div class="ttitle ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}</div>
         <div class="tmeta">
           ${ptag(t.priority)}
-          <span class="tag tc">${t.category || '通用'}</span>
-          ${t.deadline ? `<span class="tag ty">⏰ ${t.deadline}</span>` : ''}
-          <span class="tag" style="background:rgba(80,80,106,.18);color:var(--t3)">${t.source === 'agent' ? '🤖' : '✍️'}</span>
+          <span class="tag tc">${esc(t.category || '通用')}</span>
+          ${t.deadline ? `<span class="tag ty">⏰ ${esc(t.deadline)}</span>` : ''}
+          ${t.run_id ? '<span class="tag" style="background:rgba(61,255,212,.1);color:var(--cy)">有记录</span>' : ''}
         </div>
       </div>
-      <button class="delbtn" onclick="delT('${t.id}')">×</button>
+      <button class="delbtn" onclick="event.stopPropagation();delT('${t.id}')">×</button>
     </div>`).join('');
 }
 
@@ -3195,6 +3247,12 @@ function toast(msg, type = 'info') {
 
 // ══════════════════ INIT
 window.addEventListener('DOMContentLoaded', () => {
+  // 应用已保存主题
+  const savedTheme = localStorage.getItem('ai_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  const themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) themeBtn.textContent = savedTheme === 'light' ? '☀️' : '🌙';
+
   initSpeech();
   // Home waveform
   const hw = document.getElementById('homeWave');
@@ -3899,11 +3957,122 @@ document.addEventListener('DOMContentLoaded', ()=>{
   addPublishBtn();
 });
 
+// ══════════════════ THEME TOGGLE
+function toggleTheme() {
+  const root = document.documentElement;
+  const isLight = root.getAttribute('data-theme') === 'light';
+  const newTheme = isLight ? 'dark' : 'light';
+  root.setAttribute('data-theme', newTheme);
+  localStorage.setItem('ai_theme', newTheme);
+  document.getElementById('themeBtn').textContent = newTheme === 'light' ? '☀️' : '🌙';
+}
+
+// ══════════════════ TASK TABS
+let currentTaskTab = 'agent'; // 'agent' = 我的任务, 'user' = 您的待办
+
+function switchTaskTab(tab, el) {
+  currentTaskTab = tab;
+  document.querySelectorAll('.ttab').forEach(t => t.classList.remove('active','active-user'));
+  if (tab === 'agent') {
+    el.classList.add('active');
+    document.getElementById('taskPageTitle').textContent = '我的任务';
+    document.getElementById('addTaskCard').style.display = 'none';
+  } else {
+    el.classList.add('active-user');
+    document.getElementById('taskPageTitle').textContent = '您的待办';
+  }
+  rtasks();
+}
+
+// ══════════════════ TASK DETAIL MODAL
+function openTaskDetail(taskId) {
+  const t = S.tasks.find(x => x.id == taskId);
+  if (!t) return;
+  document.getElementById('tdTitle').textContent = t.source === 'agent' ? '我的任务详情' : '待办详情';
+  const statusIc = t.status === 'done' ? '✅' : '⏳';
+  const priorityLabel = t.priority === 'high' ? '高优先级' : t.priority === 'med' ? '中优先级' : '低优先级';
+  const srcLabel = t.source === 'agent' ? '🤖 助手执行' : t.source === 'voice' ? '🎙️ 语音录入' : '✍️ 手动创建';
+  const runLink = t.run_id ? `<button class="btn bp" style="padding:8px 16px;font-size:13px;margin-top:8px;width:100%" onclick="closeTaskDetail();openRunDetail('${t.run_id}')">📋 查看执行详情</button>` : '';
+  document.getElementById('tdContent').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:17px;font-weight:700;line-height:1.5;margin-bottom:10px">${esc(t.title)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        ${ptag(t.priority)}
+        <span class="tag tc">${esc(t.category || '通用')}</span>
+        ${t.deadline ? `<span class="tag ty">⏰ ${esc(t.deadline)}</span>` : ''}
+        <span class="tag" style="background:var(--s3);color:var(--t2)">${statusIc} ${t.status === 'done' ? '已完成' : '进行中'}</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn ${t.status==='done'?'bg':'bs'}" style="flex:1;font-size:13px" onclick="togT('${t.id}');closeTaskDetail()">${t.status==='done'?'标记未完成':'标记完成'}</button>
+        <button class="btn bg" style="padding:11px 14px;font-size:13px;color:var(--er)" onclick="delT('${t.id}');closeTaskDetail()">删除</button>
+      </div>
+    </div>
+    <div style="background:var(--s2);border-radius:12px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--t3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">来源信息</div>
+      <div style="font-size:13px;color:var(--t2)">${srcLabel}</div>
+    </div>
+    ${runLink}
+    ${t.source === 'agent' && !t.run_id ? '' : ''}
+    <div class="tdetail-more" onclick="toggleTDetailMore(this)">
+      <span>更多信息</span><span id="tdMoreArrow">›</span>
+    </div>
+    <div class="tdetail-extra" id="tdExtra">
+      <div><b>任务 ID：</b>${esc(String(t.id))}</div>
+      <div><b>优先级：</b>${esc(priorityLabel)}</div>
+      <div><b>截止日期：</b>${t.deadline ? esc(t.deadline) : '未设置'}</div>
+      <div><b>分类：</b>${esc(t.category || '通用')}</div>
+      <div><b>来源：</b>${esc(t.source || 'manual')}</div>
+      ${t.run_id ? `<div><b>执行 Run ID：</b><span style="font-family:monospace;font-size:11px">${esc(String(t.run_id)).slice(0,16)}…</span></div>` : ''}
+    </div>`;
+  document.getElementById('taskDetailModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function toggleTDetailMore(el) {
+  const extra = document.getElementById('tdExtra');
+  const arrow = document.getElementById('tdMoreArrow');
+  extra.classList.toggle('open');
+  arrow.textContent = extra.classList.contains('open') ? '∨' : '›';
+}
+
+function closeTaskDetail() {
+  document.getElementById('taskDetailModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// ══════════════════ RECENT ACTIVITY — 从后端执行记录渲染
+async function renderRecentActivity() {
+  const el = document.getElementById('recentActivityCard');
+  if (!el || !Auth.token) return;
+  try {
+    const data = await apiCall('GET', '/api/runs?limit=5');
+    const runs = data.runs || [];
+    if (!runs.length) return;
+    el.innerHTML = runs.map(r => {
+      const statusColor = r.status === 'done' ? 'var(--ok)' : r.status === 'failed' ? 'var(--er)' : 'var(--wn)';
+      const statusIcon  = r.status === 'done' ? '✅' : r.status === 'failed' ? '❌' : '⏳';
+      const ts = r.startedAt ? new Date(r.startedAt).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      const iconClass = r.skillName ? 'ri-purple' : 'ri-green';
+      const icon = r.skillName ? '🤖' : '🎯';
+      const subtext = r.skillName ? `${r.skillName} · ${r.totalSteps || 0} 步` : (r.goal || '').slice(0, 20);
+      return `<div class="recent-item" onclick="openRunDetail('${esc(r.runId)}')">
+        <div class="ri-icon ${iconClass}">${icon}</div>
+        <div style="flex:1">
+          <div class="ri-title">${esc((r.goal || r.skillName || '').slice(0, 28))}</div>
+          <div class="ri-sub" style="color:${statusColor}">${statusIcon} ${esc(subtext)}</div>
+        </div>
+        <div class="ri-right"><div class="ri-time">${ts}</div></div>
+      </div>`;
+    }).join('');
+  } catch { /* 离线时保持默认展示 */ }
+}
+
 // ══════════════════ DASHBOARD
 function rdash() {
   const n = S.tasks.filter(t => t.status === 'pending').length;
   document.getElementById('taskCount').textContent = n;
   document.getElementById('tbadge').textContent = n;
+  renderRecentActivity().catch(() => {});
 }
 
 // ══════════════════ SUBSCRIPTION PAGE
