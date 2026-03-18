@@ -34,9 +34,11 @@
 
 ```bash
 # 0. 先启动 OpenClaw（一次性，可复用）
+#    安装：npm install -g openclaw@latest
+#    初始化：openclaw onboard  （引导配置 Provider Keys、认证）
 #    参考 https://github.com/openclaw/openclaw
 #    默认监听 http://localhost:18789
-openclaw start
+openclaw gateway --port 18789
 
 # 1. 克隆项目，进入 backend 目录
 cd backend/
