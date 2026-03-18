@@ -153,7 +153,7 @@ function buildSkillGoal(skill, input) {
   const today = new Date().toLocaleDateString('zh-CN');
   switch (skill.builtin_type) {
     case 'ai-news':
-      return `搜索整理今天（${today}）最重要的前10条AI行业新闻，按影响力排序，最后调用 create_tasks 生成任务清单`;
+      return `搜索整理今天（${today}）最重要的前10条AI行业新闻，按影响力排序，以结构化方式呈现摘要`;
     case 'daily-brief':
       return `根据用户今日任务清单，生成简洁的工作日报，总结完成情况和未完成任务`;
     case 'analyze-voice':
