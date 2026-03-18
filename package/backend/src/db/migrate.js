@@ -276,6 +276,16 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_exp ON refresh_tokens(user_id
 -- skills：按 user_id 加速查询
 CREATE INDEX IF NOT EXISTS idx_skills_user ON skills(user_id, is_builtin);
 
+-- skills：内置技能去重（历史上多次重启可能插入了重复行），保留每个 builtin_type 最新的一条
+DELETE FROM skills
+WHERE is_builtin = true
+  AND id NOT IN (
+    SELECT DISTINCT ON (builtin_type) id
+    FROM skills
+    WHERE is_builtin = true
+    ORDER BY builtin_type, created_at DESC
+  );
+
 -- skills：内置技能按 builtin_type 唯一（用于 upsert）
 CREATE UNIQUE INDEX IF NOT EXISTS idx_skills_builtin_type ON skills(builtin_type) WHERE is_builtin = true;
 
