@@ -112,6 +112,15 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .fpicker-name{font-size:14px;font-weight:700}
 .fpicker-sub{font-size:11px;color:var(--t2);margin-top:2px}
 .fpicker-arr{font-size:18px;color:var(--t3)}
+/* ── TIMELINE ── */
+.timeline-item{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .15s}
+.timeline-item:last-child{border-bottom:none}
+.timeline-item:active{background:var(--s2)}
+.tl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.tl-body{flex:1;min-width:0}
+.tl-goal{font-size:14px;font-weight:600;color:var(--tx);line-height:1.4;margin-bottom:5px;word-break:break-word}
+.tl-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.run-step{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--s3);border-radius:8px}
 /* ── MARKET ── */
 .market-hero{margin:0 0 20px;padding:20px;background:linear-gradient(135deg,rgba(255,107,157,.15),rgba(245,200,66,.08));border:1px solid rgba(255,107,157,.2);border-radius:20px;position:relative;overflow:hidden}
 .market-hero::before{content:'🛒';position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:52px;opacity:.25}
@@ -836,9 +845,9 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
           <div class="mr-body"><div class="mr-name">AI 路由器</div><div class="mr-sub">规则引擎 · 模拟路由决策</div></div>
           <div class="mr-right">›</div>
         </div>
-        <div class="more-row" onclick="gsp('agent')">
-          <div class="mr-icon mr-cyan">🤖</div>
-          <div class="mr-body"><div class="mr-name">Agent 执行器</div><div class="mr-sub">ReAct 循环 · 可视化推理</div></div>
+        <div class="more-row" onclick="gsp('agent');rTimeline()">
+          <div class="mr-icon mr-cyan">📋</div>
+          <div class="mr-body"><div class="mr-name">执行记录</div><div class="mr-sub">每次对话 & 技能执行时间线</div></div>
           <div class="mr-right">›</div>
         </div>
         <div class="more-row" onclick="gsp('memory')">
@@ -858,6 +867,20 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
         <div class="more-row" onclick="gsp('models')">
           <div class="mr-icon mr-blue">🗂️</div>
           <div class="mr-body"><div class="mr-name">模型注册表</div><div class="mr-sub">deepseek / GPT / Claude</div></div>
+          <div class="mr-right">›</div>
+        </div>
+      </div>
+
+      <div class="more-section-label">技能与市场</div>
+      <div class="card" style="padding:0;margin-bottom:16px">
+        <div class="more-row" onclick="gp('market')">
+          <div class="mr-icon mr-gold">🛒</div>
+          <div class="mr-body"><div class="mr-name">技能市场</div><div class="mr-sub">发现、安装、出售 AI 技能</div></div>
+          <div class="mr-right">›</div>
+        </div>
+        <div class="more-row" onclick="gp('skills')">
+          <div class="mr-icon mr-purple">⚡</div>
+          <div class="mr-body"><div class="mr-name">技能中心</div><div class="mr-sub">管理你的个人技能库</div></div>
           <div class="mr-right">›</div>
         </div>
       </div>
@@ -926,23 +949,27 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <!-- ═══ SUB: AGENT ═══ -->
     <div class="page" id="page-agent">
       <div class="subpage-back" onclick="gp('more')">‹ 更多</div>
-      <div class="pad" style="padding-top:12px">
-        <div class="pgtitle" style="margin-bottom:4px">Agent 执行器</div>
-        <div class="pgsub" style="margin-bottom:20px">可视化 ReAct 推理循环</div>
-        <div class="card">
-          <div class="ctitle">自定义 Goal</div>
-          <textarea class="inp" id="agGoal" placeholder="例如：搜索今日AI热门新闻，整理出前5条并创建任务"></textarea>
-          <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">
-            <div class="ilabel" style="width:100%;margin:0">可用工具：</div>
-            <div class="cbrow"><input type="checkbox" id="tWS" checked><label for="tWS">web_search</label></div>
-            <div class="cbrow"><input type="checkbox" id="tCT" checked><label for="tCT">create_tasks</label></div>
-            <div class="cbrow"><input type="checkbox" id="tSM" checked><label for="tSM">save_memory</label></div>
-            <div class="cbrow"><input type="checkbox" id="tHC"><label for="tHC">http_call</label></div>
+      <div class="pad" style="padding-top:12px;padding-bottom:80px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div>
+            <div class="pgtitle" style="margin-bottom:2px">执行记录</div>
+            <div class="pgsub">每次对话 & 技能执行的完整时间线</div>
           </div>
-          <button class="btn bp bfull" style="margin-top:12px" onclick="runAgent()">🚀 运行 Agent</button>
+          <button class="btn bp" style="padding:8px 14px;font-size:13px" onclick="rTimeline()">🔄 刷新</button>
         </div>
-        <div class="card"><div class="ctitle">ReAct 循环可视化</div><div id="rsSteps" style="min-height:40px"></div></div>
-        <div class="card" style="margin-bottom:80px"><div class="ctitle">执行日志</div><div class="alog" id="agFL"><div style="color:var(--t3)">等待启动...</div></div></div>
+        <div id="timelineList">
+          <div class="empty-state"><div class="ei">📋</div><p>暂无执行记录<br>语音输入或点击技能即可开始</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ RUN DETAIL PAGE ═══ -->
+    <div class="page" id="page-run-detail">
+      <div class="subpage-back" onclick="gsp('agent')">‹ 执行记录</div>
+      <div class="pad" style="padding-top:12px;padding-bottom:80px">
+        <div id="runDetailContent">
+          <div class="empty-state"><div class="ei">⏳</div><p>加载中...</p></div>
+        </div>
       </div>
     </div>
 
@@ -1025,14 +1052,15 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <!-- Pending requests badge -->
     <div id="pendingRequestsBanner" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(255,107,157,.08);border:1px solid rgba(255,107,157,.2);border-radius:12px;display:flex;align-items:center;justify-content:space-between">
       <span style="font-size:13px;color:var(--pk);font-weight:600">📩 <span id="pendingCount">0</span> 条好友申请</span>
-      <button class="btn-sm btn-follow" onclick="switchSocialTab(2)" style="font-size:12px">查看</button>
+      <button class="btn-sm btn-follow" onclick="switchSocialTab(2)" style="font-size:12px">查看申请</button>
     </div>
     <!-- Tabs -->
     <div class="social-tabs">
       <div class="stab active" id="st0" onclick="switchSocialTab(0)">好友</div>
-      <div class="stab" id="st1" onclick="switchSocialTab(1)">申请</div>
-      <div class="stab" id="st2" onclick="switchSocialTab(2)">动态</div>
-      <div class="stab" id="st3" onclick="switchSocialTab(3)">发现</div>
+      <div class="stab" id="st1" onclick="switchSocialTab(1)">群组</div>
+      <div class="stab" id="st2" onclick="switchSocialTab(2)">申请</div>
+      <div class="stab" id="st3" onclick="switchSocialTab(3)">动态</div>
+      <div class="stab" id="st4" onclick="switchSocialTab(4)">发现</div>
     </div>
     <!-- Tab content -->
     <div id="sc0">
@@ -1040,17 +1068,26 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
         <div id="mutualList"><div class="empty-state"><div class="ei">👥</div><p>还没有好友<br>搜索用户添加好友吧</p></div></div>
       </div>
     </div>
-    <div id="sc1" style="display:none">
-      <div class="card" style="padding:0;margin-bottom:80px">
-        <div id="pendingList"><div class="empty-state"><div class="ei">📩</div><p>暂无待处理申请</p></div></div>
+    <div id="sc1" style="display:none;margin-bottom:80px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;color:var(--t2)">我的群组</div>
+        <button class="btn bp" style="padding:8px 14px;font-size:13px" onclick="showCreateGroup()">+ 创建群组</button>
+      </div>
+      <div class="card" style="padding:0">
+        <div id="groupList"><div class="empty-state"><div class="ei">👥</div><p>还没有群组<br>创建一个和大家一起协作</p></div></div>
       </div>
     </div>
     <div id="sc2" style="display:none">
       <div class="card" style="padding:0;margin-bottom:80px">
+        <div id="pendingList"><div class="empty-state"><div class="ei">📩</div><p>暂无待处理申请</p></div></div>
+      </div>
+    </div>
+    <div id="sc3" style="display:none">
+      <div class="card" style="padding:0;margin-bottom:80px">
         <div id="feedList"></div>
       </div>
     </div>
-    <div id="sc3" style="display:none;margin-bottom:80px">
+    <div id="sc4" style="display:none;margin-bottom:80px">
       <div class="card" style="padding:0">
         <div id="discoverList"><div class="empty-state"><div class="ei">🔍</div><p>输入手机号或昵称搜索用户</p></div></div>
       </div>
@@ -1429,6 +1466,27 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     </div>
   </div>
 
+  <!-- ═══ GROUP CHAT ═══ -->
+  <div class="page" id="page-group-chat">
+    <div style="display:flex;align-items:center;padding:12px 16px 0;gap:10px">
+      <button class="subpage-back" style="position:static;margin:0" onclick="gp('friends');switchSocialTab(1)">‹</button>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:18px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="gcName">群组</div>
+        <div style="font-size:12px;color:var(--t2)" id="gcMeta"></div>
+      </div>
+      <button class="btn bg" style="padding:8px 12px;font-size:12px" onclick="showGroupInfo()">成员</button>
+    </div>
+    <!-- Messages -->
+    <div id="gcMessages" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;margin-bottom:64px"></div>
+    <!-- Input -->
+    <div style="position:fixed;bottom:0;left:0;right:0;padding:10px 12px;background:var(--s1);border-top:1px solid var(--bd);display:flex;gap:8px;z-index:100">
+      <input id="gcInput" class="inp" placeholder="发送消息…" style="flex:1;margin:0;padding:10px 14px"
+             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendGroupMessage()}"
+             oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'">
+      <button class="btn bp" style="padding:10px 16px;flex-shrink:0" onclick="sendGroupMessage()">发送</button>
+    </div>
+  </div>
+
   </div><!-- /scroll -->
 
   <!-- BOTTOM NAV -->
@@ -1436,7 +1494,7 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
     <div class="nb active" id="nb-home" onclick="gp('home')"><div class="ni">🏠</div><div class="nl">主页</div></div>
     <div class="nb" id="nb-tasks" onclick="gp('tasks')"><div class="ni">✅</div><div class="nl">任务</div><div class="nbadge" id="tbadge">3</div></div>
     <div class="nb" id="nb-friends" onclick="gp('friends')"><div class="ni">👥</div><div class="nl">好友</div><div class="nbadge" id="fbadge" style="display:none">1</div></div>
-    <div class="nb" id="nb-market" onclick="gp('market')"><div class="ni">🛒</div><div class="nl">市场</div></div>
+    <div class="nb" id="nb-timeline" onclick="gp('agent');rTimeline()"><div class="ni">📋</div><div class="nl">记录</div></div>
     <div class="nb" id="nb-more" onclick="gp('more')"><div class="ni">⋯</div><div class="nl">更多</div></div>
   </div>
 
@@ -1646,8 +1704,9 @@ function updateGreeting(){
 
 // ══════════════════ NAV
 const ROOT_PG=['home','tasks','friends','market','more'];
-const FRIEND_PGS=['chat','friend-profile','privacy'];
+const FRIEND_PGS=['chat','friend-profile','privacy','group-chat'];
 const SKILL_PGS=['voice','skill-run'];
+const TIMELINE_PGS=['agent','run-detail'];
 function gp(pg){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
@@ -1655,9 +1714,10 @@ function gp(pg){
   if(el)el.classList.add('active');
   let nbKey;
   if(ROOT_PG.includes(pg)) nbKey=pg;
-  else if(['mdetail','publish'].includes(pg)) nbKey='market';
+  else if(['mdetail','publish'].includes(pg)) nbKey='more'; // market moved to more
   else if(FRIEND_PGS.includes(pg)) nbKey='friends';
-  else if(SKILL_PGS.includes(pg)) nbKey='home'; // voice/skill-run: highlight home
+  else if(SKILL_PGS.includes(pg)) nbKey='home';
+  else if(TIMELINE_PGS.includes(pg)) nbKey='timeline';
   else nbKey='more';
   const nb=document.getElementById(`nb-${nbKey}`);
   if(nb)nb.classList.add('active');
@@ -2368,6 +2428,13 @@ async function analyze() {
               lat: data.latencyMs || 0,
               cost: parseFloat(data.costUsd || 0).toFixed(6),
             });
+            // 快捷跳转执行记录
+            if (data.runId) {
+              const vb = document.createElement('div');
+              vb.style.cssText = 'margin-top:8px';
+              vb.innerHTML = `<button class="btn bp" style="padding:7px 16px;font-size:12px" onclick="openRunDetail('${data.runId}')">📋 查看执行详情</button>`;
+              logEl && logEl.appendChild(vb);
+            }
             break;
         }
       }
@@ -2660,6 +2727,13 @@ async function runSk(id) {
           prog.style.width = '100%';
           alog(log, `DONE   ✓ ${data.totalTokens || 0}tokens · $${data.costUsd || '0'}`, 'ld');
           S.audit.unshift({ time: new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), model: data.model, rule: `skill:${sk.builtin_type}`, ti: 0, to: data.totalTokens || 0, lat: data.latencyMs || 0, cost: parseFloat(data.costUsd || 0).toFixed(6) });
+          // 在日志末尾加"查看记录"快捷入口
+          if (data.runId) {
+            const viewBtn = document.createElement('div');
+            viewBtn.style.cssText = 'margin-top:10px;text-align:center';
+            viewBtn.innerHTML = `<button class="btn bp" style="padding:8px 20px;font-size:13px" onclick="openRunDetail('${data.runId}')">📋 查看执行详情</button>`;
+            log.appendChild(viewBtn);
+          }
         }
         if (data.type === 'error') { alog(log, `ERROR  ${data.message}`, 'le'); }
       }
@@ -2731,33 +2805,217 @@ async function simRouter() {
   }
 }
 
-// ══════════════════ AGENT（演示）
-async function runAgent() {
-  const goal = document.getElementById('agGoal').value.trim();
-  if (!goal) { toast('请输入 Agent 目标', 'error'); return; }
-  const se = document.getElementById('rsSteps'), le = document.getElementById('agFL');
-  se.innerHTML = ''; le.innerHTML = '';
-  const steps = [
-    { ph: 'Think', c: `分析目标：「${goal.slice(0, 28)}...」`, t: 'lk' },
-    { ph: 'Act', c: 'web_search("AI news 2024")', t: 'la' },
-    { ph: 'Obs', c: '收到 8 条搜索结果', t: 'lo' },
-    { ph: 'Think', c: '筛选最相关内容...', t: 'lk' },
-    { ph: 'Act', c: 'create_tasks({tasks:[...]})', t: 'la' },
-    { ph: 'Obs', c: '{ created: 5 }', t: 'lo' },
-    { ph: 'Think', c: '是否需要记忆？', t: 'lk' },
-    { ph: 'Act', c: 'save_memory({ key:"上次搜索" })', t: 'la' },
-    { ph: 'Done', c: '✓ 目标达成，共 8 步', t: 'ld' },
-  ];
-  const pc = { Think: 'var(--ac)', Act: 'var(--cy)', Obs: 'var(--wn)', Done: 'var(--ok)' };
-  for (const [i, s] of steps.entries()) {
-    await sl(550);
-    const c = pc[s.ph] || 'var(--t2)';
-    const nd = document.createElement('div'); nd.className = 'rsstep';
-    nd.innerHTML = `<div class="rsbadge" style="background:${c}22;border:1px solid ${c}44;color:${c}">${s.ph}</div><div class="rscont">${s.c}</div>`;
-    se.appendChild(nd); se.scrollTop = se.scrollHeight;
-    alog(le, `[${i + 1}/${steps.length}] ${s.c}`, s.t);
+// ══════════════════ TIMELINE（执行记录）
+async function rTimeline() {
+  const el = document.getElementById('timelineList');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--t2)">加载中...</div>';
+  if (!Auth.token) {
+    el.innerHTML = '<div class="empty-state"><div class="ei">🔒</div><p>请先登录</p></div>';
+    return;
   }
-  toast('Agent 完成（演示）', 'success');
+  try {
+    const data = await apiCall('GET', '/api/runs?limit=50');
+    const runs = data.runs || [];
+    if (!runs.length) {
+      el.innerHTML = '<div class="empty-state"><div class="ei">📋</div><p>暂无执行记录<br>语音输入或点击技能即可开始</p></div>';
+      return;
+    }
+    el.innerHTML = runs.map(r => {
+      const statusColor = r.status === 'done' ? 'var(--ok)' : r.status === 'failed' ? 'var(--er)' : 'var(--wn)';
+      const statusLabel = r.status === 'done' ? '已完成' : r.status === 'failed' ? '无法处理' : '进行中';
+      const statusIcon  = r.status === 'done' ? '✅' : r.status === 'failed' ? '❌' : '⏳';
+      const ts = r.startedAt ? new Date(r.startedAt).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      const dur = r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : '';
+      const skillTag = r.skillName ? `<span class="tag tp" style="font-size:11px">⚡ ${r.skillName}</span>` : '';
+      return `<div class="timeline-item" onclick="openRunDetail('${r.runId}')">
+        <div class="tl-dot" style="background:${statusColor}"></div>
+        <div class="tl-body">
+          <div class="tl-goal">${esc(r.goal || '').slice(0, 80)}${(r.goal || '').length > 80 ? '…' : ''}</div>
+          <div class="tl-meta">
+            <span style="color:${statusColor};font-size:12px;font-weight:600">${statusIcon} ${statusLabel}</span>
+            ${skillTag}
+            <span style="color:var(--t3);font-size:11px">${ts}</span>
+            ${dur ? `<span style="color:var(--t3);font-size:11px">${dur}</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${e.message}</p></div>`;
+  }
+}
+
+async function openRunDetail(runId) {
+  gsp('run-detail');
+  const el = document.getElementById('runDetailContent');
+  el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--t2)">加载中...</div>';
+  try {
+    const r = await apiCall('GET', `/api/runs/${runId}`);
+    const statusColor = r.status === 'done' ? 'var(--ok)' : r.status === 'failed' ? 'var(--er)' : 'var(--wn)';
+    const statusLabel = r.status === 'done' ? '已完成' : r.status === 'failed' ? '无法处理' : '进行中';
+    const dur = r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : '—';
+    const steps = r.steps || [];
+    const stepsHtml = steps.length ? steps.map(s => {
+      let icon = '▸', color = 'var(--t2)', text = '';
+      if (s.type === 'step')         { icon = '🔀'; color = 'var(--ac)'; text = s.label || ''; }
+      else if (s.type === 'tool_start') { icon = '⚙️'; color = 'var(--cy)'; text = `调用 ${s.name}(${JSON.stringify(s.args || {}).slice(0, 60)})`; }
+      else if (s.type === 'tool_done')  { icon = '✓';  color = 'var(--ok)'; text = `${s.name} 完成`; }
+      else if (s.type === 'client_action') { icon = '📲'; color = 'var(--pk)'; text = `下发客户端：${s.name}`; }
+      else if (s.type === 'error')    { icon = '❌'; color = 'var(--er)'; text = s.message || ''; }
+      else return '';
+      return `<div class="run-step"><span style="color:${color};margin-right:6px;font-size:13px">${icon}</span><span style="font-size:13px;color:var(--tx)">${esc(text)}</span><span style="color:var(--t3);font-size:11px;margin-left:auto">${s._t != null ? '+' + s._t + 'ms' : ''}</span></div>`;
+    }).join('') : '<div style="color:var(--t3);font-size:13px;padding:8px 0">暂无步骤日志</div>';
+
+    el.innerHTML = `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <span style="color:${statusColor};font-size:20px">${r.status === 'done' ? '✅' : r.status === 'failed' ? '❌' : '⏳'}</span>
+          <span style="font-weight:700;color:${statusColor}">${statusLabel}</span>
+          ${r.skillName ? `<span class="tag tp">⚡ ${esc(r.skillName)}</span>` : ''}
+        </div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:12px;line-height:1.5;color:var(--tx)">${esc(r.goal || '')}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--s3);border-radius:10px;padding:10px 12px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:2px">耗时</div>
+            <div style="font-size:16px;font-weight:700">${dur}</div>
+          </div>
+          <div style="background:var(--s3);border-radius:10px;padding:10px 12px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Token</div>
+            <div style="font-size:16px;font-weight:700">${r.tokens?.total || 0}</div>
+          </div>
+          <div style="background:var(--s3);border-radius:10px;padding:10px 12px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:2px">模型</div>
+            <div style="font-size:13px;font-weight:600">${r.model || '—'}</div>
+          </div>
+          <div style="background:var(--s3);border-radius:10px;padding:10px 12px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:2px">费用</div>
+            <div style="font-size:16px;font-weight:700">$${r.costUsd ? r.costUsd.toFixed(5) : '0'}</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ctitle" style="margin-bottom:10px">执行步骤</div>
+        <div style="display:flex;flex-direction:column;gap:6px">${stepsHtml}</div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${e.message}</p></div>`;
+  }
+}
+
+// ══════════════════ GROUPS（群组）
+let currentGroupId = null;
+
+async function rGroups() {
+  const el = document.getElementById('groupList');
+  if (!el || !Auth.token) return;
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t2)">加载中...</div>';
+  try {
+    const data = await apiCall('GET', '/api/groups');
+    const groups = data.groups || [];
+    if (!groups.length) {
+      el.innerHTML = '<div class="empty-state"><div class="ei">👥</div><p>还没有群组<br>创建一个和大家一起协作</p></div>';
+      return;
+    }
+    el.innerHTML = groups.map(g => {
+      const ts = g.lastMessageAt ? new Date(g.lastMessageAt).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      return `<div class="fitem" onclick="openGroupChat('${g.id}','${esc(g.name)}','${esc(g.emoji)}',${g.memberCount})">
+        <div class="fav" style="font-size:26px;background:var(--s3)">${g.emoji}</div>
+        <div class="fbody">
+          <div class="fname">${esc(g.name)} <span style="color:var(--t3);font-size:11px;font-weight:400">${g.memberCount}人</span></div>
+          <div class="fmeta">${g.lastMessage ? esc(g.lastMessage.slice(0, 30)) : '还没有消息'}</div>
+        </div>
+        ${ts ? `<div style="font-size:11px;color:var(--t3);white-space:nowrap">${ts}</div>` : ''}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="padding:16px;color:var(--er);font-size:13px">${e.message}</div>`;
+  }
+}
+
+function showCreateGroup() {
+  const name = prompt('群组名称：');
+  if (!name?.trim()) return;
+  const emoji = prompt('群组 Emoji（默认 👥）：') || '👥';
+  createGroup(name.trim(), emoji.trim() || '👥');
+}
+
+async function createGroup(name, emoji) {
+  try {
+    const g = await apiCall('POST', '/api/groups', { name, emoji });
+    toast(`群组「${g.name}」创建成功`, 'success');
+    rGroups();
+    openGroupChat(g.id, g.name, g.emoji, 1);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function openGroupChat(groupId, name, emoji, memberCount) {
+  currentGroupId = groupId;
+  document.getElementById('gcName').textContent = `${emoji} ${name}`;
+  document.getElementById('gcMeta').textContent = `${memberCount} 位成员`;
+  document.getElementById('gcMessages').innerHTML = '';
+  document.getElementById('gcInput').value = '';
+  gp('group-chat');
+  await loadGroupMessages();
+}
+
+async function loadGroupMessages() {
+  if (!currentGroupId) return;
+  const el = document.getElementById('gcMessages');
+  try {
+    const data = await apiCall('GET', `/api/groups/${currentGroupId}/messages?limit=50`);
+    const msgs = data.messages || [];
+    if (!msgs.length) {
+      el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--t3);font-size:13px">还没有消息，说点什么吧 👋</div>';
+      return;
+    }
+    el.innerHTML = msgs.map(m => {
+      const isOwn = m.isOwn;
+      return `<div style="display:flex;flex-direction:${isOwn?'row-reverse':'row'};align-items:flex-end;gap:8px">
+        ${!isOwn ? `<div style="font-size:24px;flex-shrink:0">${m.avatarEmoji}</div>` : ''}
+        <div style="max-width:72%">
+          ${!isOwn ? `<div style="font-size:11px;color:var(--t3);margin-bottom:3px;${isOwn?'text-align:right':''}">${esc(m.senderName)}</div>` : ''}
+          <div style="background:${isOwn?'var(--ac)':'var(--s3)'};color:${isOwn?'#fff':'var(--tx)'};padding:10px 14px;border-radius:${isOwn?'16px 16px 4px 16px':'16px 16px 16px 4px'};font-size:14px;line-height:1.5;word-break:break-word">${esc(m.content)}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:3px;text-align:${isOwn?'right':'left'}">${new Date(m.createdAt).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+      </div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {
+    el.innerHTML = `<div style="padding:16px;color:var(--er);font-size:13px">${e.message}</div>`;
+  }
+}
+
+async function sendGroupMessage() {
+  if (!currentGroupId) return;
+  const inp = document.getElementById('gcInput');
+  const content = inp.value.trim();
+  if (!content) return;
+  inp.value = ''; inp.style.height = '';
+  try {
+    const msg = await apiCall('POST', `/api/groups/${currentGroupId}/messages`, { content });
+    const el = document.getElementById('gcMessages');
+    const isOwn = true;
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;flex-direction:row-reverse;align-items:flex-end;gap:8px';
+    div.innerHTML = `<div style="max-width:72%">
+      <div style="background:var(--ac);color:#fff;padding:10px 14px;border-radius:16px 16px 4px 16px;font-size:14px;line-height:1.5;word-break:break-word">${esc(content)}</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:3px;text-align:right">${new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`;
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+  } catch(e) { toast(e.message, 'error'); inp.value = content; }
+}
+
+async function showGroupInfo() {
+  if (!currentGroupId) return;
+  try {
+    const g = await apiCall('GET', `/api/groups/${currentGroupId}`);
+    const memberList = g.members.map(m =>
+      `${m.avatarEmoji} ${m.displayName}${m.role==='admin'?' 👑':''}${m.userId===Auth.userId?' (我)':''}`
+    ).join('\n');
+    alert(`${g.emoji} ${g.name}\n${g.members.length} 位成员：\n${memberList}`);
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 // ══════════════════ MEMORY
@@ -3082,12 +3340,15 @@ function talentLabel(t) {
 }
 
 function switchSocialTab(idx) {
-  for(let i=0;i<4;i++){
-    document.getElementById(`st${i}`).classList.toggle('active', i===idx);
+  for(let i=0;i<5;i++){
+    const tab = document.getElementById(`st${i}`);
+    if(tab) tab.classList.toggle('active', i===idx);
     const sc = document.getElementById(`sc${i}`);
     if(sc) sc.style.display = i===idx ? '' : 'none';
   }
   currentSocialTab = idx;
+  // 切到群组 tab 时自动加载
+  if (idx === 1) rGroups();
 }
 
 function onFriendSearchInput(v) {
@@ -3100,7 +3361,7 @@ function onFriendSearchInput(v) {
 async function searchUsers() {
   const q = document.getElementById('friendSearch').value.trim();
   if(!q){toast('请输入搜索内容','error');return;}
-  switchSocialTab(3);
+  switchSocialTab(4);
   const el = document.getElementById('discoverList');
   el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t2)">搜索中...</div>';
   try {

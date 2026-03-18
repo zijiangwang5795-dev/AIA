@@ -126,6 +126,8 @@ module.exports = async function analyzeRoutes(app) {
         model: skill.model_pref || layer1.selectedModel,
         routingRule: `skill:${skill.builtin_type}`,
         intent: skill.builtin_type || layer1.intent,
+        skillId: skill.id,
+        skillName: skill.name,
         send,
       });
 
