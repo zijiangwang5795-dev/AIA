@@ -66,22 +66,46 @@ async function runAgent({
   // 初始用户消息
   messages.push({ role: 'user', content: text });
 
+  // 模型调用：支持连接失败时自动降级
+  // 降级顺序：首选模型 → deepseek-chat → 报错
+  const MODEL_FALLBACK_CHAIN = (() => {
+    const chain = [model];
+    if (model !== 'deepseek-chat') chain.push('deepseek-chat');
+    if (model !== 'gpt-4o-mini' && !chain.includes('gpt-4o-mini')) chain.push('gpt-4o-mini');
+    return chain;
+  })();
+
+  const callWithFallback = async (callArgs) => {
+    let lastErr;
+    for (const m of MODEL_FALLBACK_CHAIN) {
+      try {
+        return await callOpenClaw({ ...callArgs, model: m });
+      } catch (err) {
+        const isConnErr = /connect|network|ECONNREFUSED|ETIMEDOUT|fetch|socket/i.test(err.message || '');
+        if (!isConnErr) throw err;  // 非连接错误（如 400/401）直接抛出
+        lastErr = err;
+        sendAndRecord({ type: 'step', label: `⚠️ 模型 ${m} 连接失败，尝试备用模型...` });
+      }
+    }
+    throw lastErr;
+  };
+
   // ── ReAct 循环（通过 OpenClaw 网关调用 AI）──────────
   for (let step = 0; step < MAX_STEPS; step++) {
-    sendAndRecord({ type: 'step', step: step + 3, label: `第 ${step + 1} 轮推理（OpenClaw）...` });
+    sendAndRecord({ type: 'step', step: step + 3, label: `第 ${step + 1} 轮推理...` });
 
     // 使用运行时配置覆盖模型（调试用）
     const rt = getRuntimeConfig();
     const effectiveModel = rt.aiModel || model;
 
-    const result = await callOpenClaw({
+    const result = await callWithFallback({
       model:        effectiveModel,
       systemPrompt,
       messages,
       tools,
       stream:       true,
       onChunk:      (chunk) => send(chunk),
-      userId,       // 用于 dedicated/shared 模式路由
+      userId,
     });
 
     totalInputTokens  += result.usage?.prompt_tokens    || 0;

@@ -20,13 +20,25 @@ const KEY_VALIDATORS = {
 };
 
 // 检查某个模型是否可用（Key 存在且格式合法）
-// 若通过 OpenClaw 网关路由，只需 OPENCLAW_API_KEY 有效
 function isModelAvailable(model) {
-  const { isOpenClawConfigured } = require('../openclaw/client');
-  if (isOpenClawConfigured()) return true;
+  if (!model) return false;
 
+  const { getRuntimeConfig } = require('../../config/runtime');
+  const rt = getRuntimeConfig();
+
+  // 运行时 aiApiKey 覆盖 → 所有模型均可用（直连任意 endpoint）
+  if (rt.aiApiKey) return true;
+
+  const { isOpenClawConfigured } = require('../openclaw/client');
+  if (isOpenClawConfigured()) {
+    // OpenClaw 网关模式：网关负责模型路由，本地无需持有 key
+    // 但仅限已知模型列表，未知模型名可能导致网关报错
+    return model in MODEL_KEY_MAP || model === (process.env.OPENCLAW_DEFAULT_MODEL || 'deepseek-chat');
+  }
+
+  // 直连模式：必须有对应厂商的 API Key 且格式合法
   const envKey = MODEL_KEY_MAP[model];
-  if (!envKey) return false;
+  if (!envKey) return false;  // 未知模型，直连时无法处理
 
   const keyValue = process.env[envKey];
   if (!keyValue) return false;
