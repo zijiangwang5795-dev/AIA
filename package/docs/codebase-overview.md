@@ -98,6 +98,7 @@ AIA/
         ├── .env.example
         ├── Dockerfile
         ├── docker-compose.yml
+        ├── public -> ../frontend       # 符号链接（本地开发静态文件）
         └── src/
             ├── index.js               # Fastify 入口，路由挂载
             │
@@ -109,7 +110,9 @@ AIA/
             │   ├── skills.js          # 技能路由（代理 _crud）
             │   ├── memory.js          # 记忆路由（代理 _crud）
             │   ├── audit.js           # 审计日志
-            │   ├── friends.js         # 好友社交
+            │   ├── friends.js         # 好友社交（私聊）
+            │   ├── groups.js          # 群组社交（群聊）
+            │   ├── runs.js            # Agent 执行记录（时间线）
             │   ├── billing.js         # 订阅计费
             │   ├── feedback.js        # 用户反馈
             │   ├── push.js            # 推送通知
@@ -161,14 +164,41 @@ AIA/
 | 前缀 | 模块 |
 |---|---|
 | `/auth` | `routes/auth.js` |
-| `/api` | `routes/analyze.js`, `tasks.js`, `skills.js`, `memory.js`, `audit.js`, `friends.js`, `billing.js`, `feedback.js`, `push.js` |
+| `/api` | `routes/analyze.js`, `tasks.js`, `skills.js`, `memory.js`, `audit.js`, `friends.js`, `groups.js`, `runs.js`, `billing.js`, `feedback.js`, `push.js` |
 | `/api/openclaw` | `routes/openclaw.js` |
 | `/admin` | `routes/admin.js` |
 
 **全局配置：**
 - 限速：100 次/分钟
-- CORS：开发期 `origin: true`（生产需收窄）
+- CORS：见下方 CORS 策略说明
 - JWT：默认 2h 过期
+- 静态文件：`@fastify/static` 挂载 `../public`（`index: 'index.html'`），本地开发通过符号链接 `public → ../frontend` 读取
+
+**CORS 策略：**
+
+| 模式 | `NODE_ENV` | `ALLOWED_ORIGINS` | 行为 |
+|---|---|---|---|
+| 开发 | `development` | 任意 | `origin: true`，全部放行 |
+| 生产·自托管 | `production` | **未配置**（空） | 全部放行（前后端同源，浏览器 SOP 保护足够）|
+| 生产·独立域名 | `production` | 填写了白名单 | 仅允许白名单内 Origin，其余返回 403 |
+
+> 设计原则：前后端由同一 Fastify 实例提供服务时，CORS 白名单非必须——同源请求受浏览器 SOP 保护。仅当前端部署在独立域名（如 CDN）时才需配置 `ALLOWED_ORIGINS`。
+
+**CSP 策略（生产模式 `@fastify/helmet`）：**
+
+```
+default-src     'self'
+script-src      'self' 'unsafe-inline'   ← SPA 内联 <script> 必须
+script-src-attr 'unsafe-inline'          ← SPA onclick= 事件处理器必须
+style-src       'self' 'unsafe-inline' https://fonts.googleapis.com
+font-src        'self' https://fonts.gstatic.com
+img-src         'self' data: https:
+connect-src     'self' wss: ws:          ← SSE / WebSocket 必须
+frame-src       'none'
+object-src      'none'
+```
+
+> 开发模式（`NODE_ENV=development`）CSP 完全关闭（`contentSecurityPolicy: false`）。
 
 ---
 
@@ -509,6 +539,44 @@ getOpenClawConfig()       // 返回 { url, token, defaultModel, embedModel }
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/audit` | 返回日志列表 + 汇总统计（总调用数、总 Token、总费用、平均延迟）|
+
+---
+
+#### `src/routes/groups.js`（群组）
+
+群组聊天完整 API：
+
+| 接口 | 权限 | 说明 |
+|---|---|---|
+| `POST /api/groups` | JWT | 创建群组；`memberIds[]` 批量邀请；创建者自动成为 admin |
+| `GET /api/groups` | JWT | 我参与的所有群组（含最新一条消息预览）|
+| `GET /api/groups/:id` | JWT（成员）| 群详情 + 成员列表 |
+| `GET /api/groups/:id/messages` | JWT（成员）| 群聊消息（游标分页，`?before=<id>`）|
+| `POST /api/groups/:id/messages` | JWT（成员）| 发送消息；异步 FCM 推送其他成员 |
+| `POST /api/groups/:id/members` | JWT（admin）| 添加成员 |
+| `DELETE /api/groups/:id/members/:uid` | JWT（成员/admin）| 退出或踢人 |
+| `DELETE /api/groups/:id` | JWT（creator）| 解散群组（级联删除消息和成员）|
+
+**限速：** 群消息发送 60 次/分钟/用户。
+
+---
+
+#### `src/routes/runs.js`（执行时间线）
+
+Agent 运行记录查询接口，对应前端"记录"页面：
+
+| 接口 | 说明 |
+|---|---|
+| `GET /api/runs` | 最近 50 条执行记录（支持 `?before=<runId>` 游标翻页）|
+| `GET /api/runs/:runId` | 单次执行完整详情（步骤日志 + token/费用/延迟/模型/意图，JOIN `ai_audit_logs`）|
+
+**状态颜色映射：**
+
+| 状态 | 含义 |
+|---|---|
+| `done` | 已完成（绿色）|
+| `running` | 进行中（蓝色）|
+| `failed` | 失败（红色）|
 
 ---
 
@@ -932,6 +1000,26 @@ while (true) {
 | PUT | `/api/openclaw/config` | JWT + 付费 | 配置专属实例 |
 | DELETE | `/api/openclaw/config` | JWT | 删除专属配置 |
 
+### 群组接口
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| POST | `/api/groups` | JWT | 创建群组，批量邀请成员 |
+| GET | `/api/groups` | JWT | 我的群组列表（含最新消息预览）|
+| GET | `/api/groups/:id` | JWT（成员）| 群详情 + 成员列表 |
+| GET | `/api/groups/:id/messages` | JWT（成员）| 群消息（游标分页）|
+| POST | `/api/groups/:id/messages` | JWT（成员）| 发送群消息 |
+| POST | `/api/groups/:id/members` | JWT（admin）| 添加成员 |
+| DELETE | `/api/groups/:id/members/:uid` | JWT（成员）| 退出/踢出成员 |
+| DELETE | `/api/groups/:id` | JWT（creator）| 解散群组 |
+
+### 执行记录接口（时间线）
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| GET | `/api/runs` | JWT | 最近 50 条执行记录（支持 before 游标）|
+| GET | `/api/runs/:runId` | JWT | 单次执行详情（步骤日志 + 费用统计）|
+
 ### 其他接口
 
 | 方法 | 路径 | 说明 |
@@ -1025,12 +1113,15 @@ agent_runs (
   run_id       VARCHAR(50) UNIQUE,
   user_id      UUID → users.id,
   skill_id     UUID → skills.id,
+  skill_name   TEXT,                  -- 技能显示名（冗余，避免 JOIN）
   goal         TEXT,
   status       VARCHAR(20),           -- running / done / failed
   total_steps  INTEGER,
+  run_steps    JSONB DEFAULT '[]',    -- 完整步骤日志数组（type/data/_t 时间戳）
   started_at   TIMESTAMPTZ,
   completed_at TIMESTAMPTZ
 )
+-- 索引：idx_agent_runs_user ON agent_runs(user_id, started_at DESC)
 ```
 
 ### 记忆系统
@@ -1116,6 +1207,38 @@ monthly_usage (
   cost_usd    DECIMAL(10,4),
   PRIMARY KEY(user_id, year_month)   -- O(1) 配额查询
 )
+```
+
+### 群组系统
+
+```sql
+groups (
+  id          UUID PK,
+  name        VARCHAR(100) NOT NULL,
+  emoji       VARCHAR(10) DEFAULT '👥',
+  description TEXT,
+  creator_id  UUID → users.id,
+  created_at  TIMESTAMPTZ
+)
+
+group_members (
+  group_id  UUID → groups.id,
+  user_id   UUID → users.id,
+  role      VARCHAR(20) DEFAULT 'member',   -- member / admin
+  joined_at TIMESTAMPTZ,
+  PRIMARY KEY(group_id, user_id)
+)
+
+group_messages (
+  id           UUID PK,
+  group_id     UUID → groups.id,
+  from_user_id UUID → users.id,
+  content      TEXT NOT NULL,
+  sender_name  VARCHAR(100),
+  created_at   TIMESTAMPTZ
+)
+-- 索引：idx_group_messages_grp ON group_messages(group_id, created_at DESC)
+-- 索引：idx_group_members_user ON group_members(user_id)
 ```
 
 ### 其他
@@ -1316,13 +1439,18 @@ DEMO_OTP=123456
 - ✅ `/push/send` 改为 `INTERNAL_API_SECRET` 保护，移除 JWT 用户可访问路径
 - ✅ API Key 管理端掩码显示
 - ✅ Android JWT 存入 `SharedPreferences`（`MODE_PRIVATE`，不可备份）
-- ✅ 数据库关键索引（tasks, friendships, messages, refresh_tokens, skills, monthly_usage, subscriptions）
+- ✅ 数据库关键索引（tasks, friendships, messages, refresh_tokens, skills, monthly_usage, subscriptions, agent_runs, group_messages）
+- ✅ `@fastify/helmet` CSP 生产模式：允许 `unsafe-inline`（SPA 内联脚本必须），`connect-src wss:`（SSE），其余严格收窄
+- ✅ CORS 自适应策略：`ALLOWED_ORIGINS` 未配置时自托管模式全放行，配置后严格白名单（避免误封同源请求）
+- ✅ 静态文件路径：容器内 `/app/public`（docker-compose 挂载 `../frontend:/app/public`），本地开发通过 `public → ../frontend` 符号链接
+- ✅ Agent 执行步骤持久化：`run_steps JSONB` 存储完整步骤日志，`GET /api/runs/:runId` 可查回放
+- ✅ 群组社交：创建/管理群组 + 群聊消息 + FCM 群推送（`groups.js`，8 个端点）
 
 ### 生产部署前必须完成
 
 | 项 | 当前状态 | 要求 |
 |---|---|---|
-| CORS | `origin: true` | 设置 `ALLOWED_ORIGINS`，收窄为具体域名 |
+| CORS | 自托管默认放行，配置白名单后收窄 | 独立域名部署时设置 `ALLOWED_ORIGINS` |
 | JWT_SECRET | 有默认 fallback | 必须设置为 256 位随机值，无 fallback |
 | ADMIN_USER_IDS | 空值 = 全员禁止 | 填写管理员 UUID |
 | INTERNAL_API_SECRET | 默认占位值 | 必须设置随机值 |
@@ -1335,7 +1463,7 @@ DEMO_OTP=123456
 | 敏感字段加密 | 手机号明文 | 生产建议加密存储 |
 | GDPR | 无 | 需提供数据导出和删除接口 |
 | 内容审核 | 无 | soul_prompt 需过滤违规内容 |
-| 响应安全头 | 无 Helmet | 添加 HSTS、X-Content-Type-Options、X-Frame-Options、CSP |
+| 响应安全头 | ✅ `@fastify/helmet` 已接入 | 生产环境已启用 CSP/HSTS/X-Content-Type-Options 等；CSP 因 SPA 内联脚本已放开 `unsafe-inline` |
 | bcrypt cost | 8（低于 OWASP 推荐 12）| 提升至 12 |
 
 ### 待实现功能（TODO）
