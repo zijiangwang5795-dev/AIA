@@ -1,6 +1,48 @@
 'use strict';
 const { query } = require('../../db/client');
 
+// ── 模型 → 所需 ENV Key 映射 ──────────────────────────
+const MODEL_KEY_MAP = {
+  'gpt-4o-mini':       'OPENAI_API_KEY',
+  'gpt-4o':            'OPENAI_API_KEY',
+  'deepseek-chat':     'DEEPSEEK_API_KEY',
+  'deepseek-reasoner': 'DEEPSEEK_API_KEY',
+  'claude-3-5-haiku':  'ANTHROPIC_API_KEY',
+  'claude-sonnet-4-6': 'ANTHROPIC_API_KEY',
+};
+
+// Key 格式校验（基础合法性判断，非真实鉴权）
+const KEY_VALIDATORS = {
+  OPENAI_API_KEY:    (k) => /^sk-(proj-)?[A-Za-z0-9_-]{20,}$/.test(k),
+  DEEPSEEK_API_KEY:  (k) => /^sk-[A-Za-z0-9_-]{20,}$/.test(k),
+  ANTHROPIC_API_KEY: (k) => /^sk-ant-[A-Za-z0-9_-]{20,}$/.test(k),
+  OPENCLAW_API_KEY:  (k) => typeof k === 'string' && k.trim().length >= 8,
+};
+
+// 检查某个模型是否可用（Key 存在且格式合法）
+// 若通过 OpenClaw 网关路由，只需 OPENCLAW_API_KEY 有效
+function isModelAvailable(model) {
+  const { isOpenClawConfigured } = require('../openclaw/client');
+  if (isOpenClawConfigured()) return true;
+
+  const envKey = MODEL_KEY_MAP[model];
+  if (!envKey) return false;
+
+  const keyValue = process.env[envKey];
+  if (!keyValue) return false;
+
+  const validate = KEY_VALIDATORS[envKey];
+  return validate ? validate(keyValue) : keyValue.length > 0;
+}
+
+// 按候选顺序返回第一个可用模型
+function pickAvailableModel(...candidates) {
+  for (const m of candidates) {
+    if (m && isModelAvailable(m)) return m;
+  }
+  return null;
+}
+
 // ── 意图分类规则 ─────────────────────────────────────
 const INTENT_RULES = [
   // 社交：助手代发消息（最高优先级，关键词明确）
@@ -21,12 +63,14 @@ const INTENT_RULES = [
 ];
 
 // ── 模型路由规则（责任链，按 priority 升序）─────────
+// 每条规则可带 fallbackModel，当 model 不可用时自动尝试
 const ROUTING_RULES = [
   {
     name: 'needs-web-search',
     priority: 10,
     match: (ctx) => ctx.tools?.includes('web_search') || ctx.intent === 'web-search' || ctx.intent === 'ai-news',
     model: 'gpt-4o-mini',
+    fallbackModel: 'deepseek-chat',
     reason: '需要联网搜索',
   },
   {
@@ -34,6 +78,7 @@ const ROUTING_RULES = [
     priority: 20,
     match: (ctx) => ctx.intent === 'deep-analysis' || (ctx.agentSteps || 0) > 3,
     model: 'deepseek-reasoner',
+    fallbackModel: 'deepseek-chat',
     reason: '多步推理，使用 R1 模型',
   },
   {
@@ -48,6 +93,7 @@ const ROUTING_RULES = [
     priority: 40,
     match: (ctx) => !!ctx.userPreferredModel,
     model: (ctx) => ctx.userPreferredModel,
+    // 用户偏好模型已在 step-3 过滤不可用情况，无需 fallback
     reason: '用户自定义模型偏好',
   },
   {
@@ -55,23 +101,22 @@ const ROUTING_RULES = [
     priority: 999,
     match: () => true,
     model: 'deepseek-chat',
+    fallbackModel: 'gpt-4o-mini',
     reason: '默认兜底模型',
   },
 ];
 
 // ── 技能 → 工具映射 ──────────────────────────────────
-// 注：客户端意图（client-*）不需要服务端工具；客户端技能定义由前端动态上报
 const SKILL_TOOL_MAP = {
   'ai-news':        ['web_search', 'create_tasks', 'save_memory'],
   // analyze-voice 携带全量工具：AI 按能力自行决定直接执行还是存待办
   'analyze-voice':  ['create_tasks', 'send_friend_message', 'web_search', 'memory_search', 'save_memory'],
   'daily-brief':    ['memory_search', 'get_tasks'],
   'deep-analysis':  ['web_search', 'memory_search', 'calculator'],
-  'client-alarm':   ['create_tasks'],   // 同时创建任务记录
-  'client-calendar':['create_tasks'],   // 同时创建任务记录
+  'client-alarm':   ['create_tasks'],
+  'client-calendar':['create_tasks'],
   'client-call':    [],
   'client-sms':     [],
-  // 发消息意图：同时带 create_tasks，以便将无法执行的其他子任务存入待办
   'send-friend-message': ['send_friend_message', 'create_tasks', 'memory_search'],
   'default':        ['create_tasks', 'memory_search'],
 };
@@ -95,14 +140,18 @@ async function layer1Process(text, userId, options = {}) {
   const skillType = options.skillType || intent;
   const tools = SKILL_TOOL_MAP[skillType] || SKILL_TOOL_MAP['default'];
 
-  // 3. 获取用户偏好模型
+  // 3. 获取用户偏好模型，并验证可用性
   let userPreferredModel = null;
   try {
     const res = await query(`SELECT preferred_model FROM users WHERE id=$1`, [userId]);
-    userPreferredModel = res.rows[0]?.preferred_model || null;
+    const pref = res.rows[0]?.preferred_model || null;
+    // 偏好模型需通过 key 可用性检查，否则忽略
+    if (pref && isModelAvailable(pref)) {
+      userPreferredModel = pref;
+    }
   } catch { /* 数据库不可用 */ }
 
-  // 4. 路由决策
+  // 4. 路由决策：按规则优先级遍历，找到第一个有可用模型的规则
   const routingCtx = {
     intent,
     tools,
@@ -111,26 +160,31 @@ async function layer1Process(text, userId, options = {}) {
     userPreferredModel,
   };
 
-  const routingRules = [...ROUTING_RULES].sort((a, b) => a.priority - b.priority);
-  let selectedModel = 'deepseek-chat';
-  let selectedRule = 'fallback';
+  const sortedRules = [...ROUTING_RULES].sort((a, b) => a.priority - b.priority);
+  let selectedModel = null;
+  let selectedRule = 'no-available-model';
 
-  for (const rule of routingRules) {
-    if (rule.match(routingCtx)) {
-      selectedModel = typeof rule.model === 'function' ? rule.model(routingCtx) : rule.model;
-      selectedRule = rule.name;
+  for (const rule of sortedRules) {
+    if (!rule.match(routingCtx)) continue;
+
+    const preferredModel = typeof rule.model === 'function'
+      ? rule.model(routingCtx)
+      : rule.model;
+
+    const resolved = pickAvailableModel(preferredModel, rule.fallbackModel);
+    if (resolved) {
+      selectedModel = resolved;
+      selectedRule = resolved === preferredModel ? rule.name : `${rule.name}→fallback`;
       break;
     }
+    // 该规则匹配但模型均不可用，继续下一条规则
   }
 
-  // 5. 检查模型可用性（如果没有对应 Key，降级到 deepseek-chat）
-  if (selectedModel === 'gpt-4o-mini' && !process.env.OPENAI_API_KEY) {
-    selectedModel = 'deepseek-chat';
-    selectedRule = 'fallback-no-openai-key';
-  }
-  if (selectedModel === 'deepseek-reasoner' && !process.env.DEEPSEEK_API_KEY) {
-    selectedModel = 'deepseek-chat';
-    selectedRule = 'fallback-no-key';
+  // 5. 最终兜底：从已知模型中取任意可用的
+  if (!selectedModel) {
+    selectedModel = Object.keys(MODEL_KEY_MAP).find(m => isModelAvailable(m))
+      || 'deepseek-chat'; // OpenClaw 场景下 isModelAvailable 恒返回 true，会命中上面
+    selectedRule = 'emergency-fallback';
   }
 
   const processingMs = Date.now() - startTime;
@@ -145,4 +199,4 @@ async function layer1Process(text, userId, options = {}) {
   };
 }
 
-module.exports = { layer1Process, INTENT_RULES, ROUTING_RULES };
+module.exports = { layer1Process, INTENT_RULES, ROUTING_RULES, isModelAvailable, MODEL_KEY_MAP };
