@@ -127,6 +127,13 @@ AIA/
             ├── personality/
             │   └── assembler.js       # 系统提示词组装
             │
+            ├── skills/                # 内置技能系统
+            │   ├── index.js           # 加载器：seedBuiltinSkills / buildGoal / SKILL_TOOL_MAP
+            │   └── definitions/       # 每个文件 = 一个内置技能（单一数据源）
+            │       ├── ai-news.js
+            │       ├── analyze-voice.js
+            │       └── daily-brief.js
+            │
             ├── tools/
             │   └── registry.js        # 工具定义 + 执行器
             │
@@ -281,17 +288,45 @@ GET /auth/wechat/callback?code=xxx&state=yyy
 
 **降级保护：** 若选定模型对应的 API Key 不存在，自动回退到 `deepseek-chat`。
 
-**技能 → 工具映射：**
+**内置技能定义（`src/skills/definitions/*.js`）：**
 
-| 技能 | 可用工具 |
-|---|---|
-| `ai-news` | web_search, create_tasks, save_memory |
-| `analyze-voice` | create_tasks, memory_search, save_memory |
-| `daily-brief` | memory_search, get_tasks |
-| `deep-analysis` | web_search, memory_search, calculator |
-| `client-alarm/calendar` | create_tasks（同步写入任务记录） |
-| `send-friend-message` | send_friend_message |
-| `default` | create_tasks, memory_search |
+每个内置技能在独立文件中声明所有属性，是该技能的**唯一数据源**：
+
+```js
+// 示例：definitions/ai-news.js
+module.exports = {
+  name:          'AI新闻整理',
+  emoji:         '📰',
+  description:   '搜索整理当天最重要的AI行业新闻',
+  builtin_type:  'ai-news',
+  // goal：技能执行时的提示词，支持字符串或函数 (input, today) => string
+  goal:          (input, today) => `搜索整理今天（${today}）最重要的前10条AI行业新闻...`,
+  allowed_tools: ['web_search'],          // DB 记录的允许工具
+  layer1_tools:  ['web_search', 'save_memory'],  // layer1 路由注入的工具集
+};
+```
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `name` / `emoji` / `description` | string | 展示用，同步写入 DB |
+| `builtin_type` | string | 唯一标识，DB 唯一索引键 |
+| `goal` | string \| `(input, today) => string` | 执行提示词（取代原 analyze.js 硬编码 switch） |
+| `allowed_tools` | string[] | 存入 skills 表，权限管控 |
+| `layer1_tools` | string[] | layer1 路由时注入 Agent 的工具集 |
+
+`src/skills/index.js` 暴露三个导出：
+
+- `seedBuiltinSkills(query)` — 服务启动时幂等 upsert 到 DB
+- `SKILL_TOOL_MAP` — `builtin_type → layer1_tools`，供 layer1 路由使用
+- `buildGoal(skill, input)` — 读取 `def.goal`，生成最终执行 goal 文本
+
+**当前内置技能：**
+
+| `builtin_type` | 名称 | layer1 工具 |
+|---|---|---|
+| `ai-news` | AI新闻整理 | web_search, save_memory |
+| `analyze-voice` | 语音分析 | create_tasks, memory_search |
+| `daily-brief` | 智能日报 | memory_search, get_tasks |
 
 **输出：** `{ intent, intentConfidence, tools[], selectedModel, selectedRule, processingMs }`
 
