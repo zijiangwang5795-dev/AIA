@@ -51,11 +51,23 @@
 
 ### 2.1 安装 OpenClaw
 
-```bash
-# 方式 A：npm 全局安装
-npm install -g openclaw
-openclaw start --port 18789
+**系统要求：** Node.js ≥ 22（推荐 Node 24）
 
+```bash
+# 方式 A：npm 全局安装（推荐）
+npm install -g openclaw@latest
+
+# 初始化向导（引导配置网关、Provider Keys、认证）
+openclaw onboard
+
+# 安装为系统后台服务（systemd / launchd），开机自启
+openclaw onboard --install-daemon
+
+# 手动启动网关（指定端口）
+openclaw gateway --port 18789
+```
+
+```bash
 # 方式 B：Docker
 docker run -d \
   --name openclaw \
@@ -66,6 +78,8 @@ docker run -d \
 ```
 
 > 默认监听 `http://0.0.0.0:18789`，确保防火墙允许后端服务器访问该端口。
+>
+> 安装后运行 `openclaw dashboard` 或打开 `http://127.0.0.1:18789/` 可验证网关正常启动。
 
 ### 2.2 配置 AI Provider Keys
 
@@ -293,7 +307,17 @@ curl -X PUT http://your-backend:3000/auth/profile \
 ### 6.1 验证 OpenClaw 正常运行
 
 ```bash
-# 健康检查
+# 查看网关状态（CLI）
+openclaw gateway status
+
+# 诊断配置问题（检查 Provider Keys、认证、端口冲突等）
+openclaw doctor
+
+# 打开 Web 控制台（浏览器）
+openclaw dashboard
+# 或直接访问 http://127.0.0.1:18789/
+
+# HTTP 健康检查
 curl http://<openclaw-host>:18789/health
 
 # 测试 LLM 调用
