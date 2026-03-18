@@ -3047,11 +3047,15 @@ async function openRunDetail(runId) {
         <div><b>费用：</b>$${r.costUsd?r.costUsd.toFixed(5):'0'}</div>
       </div>`;
 
-    // AI 文本回复区块
+    // AI 文本回复区块（折叠，置于最下方）
     const textResultHtml = textResults.length ? `
       <div class="card" style="margin-bottom:12px">
-        <div class="ctitle" style="margin-bottom:10px">💬 AI 回复</div>
-        ${textResults.map(s => `<div style="font-size:14px;line-height:1.7;color:var(--tx);white-space:pre-wrap;word-break:break-word">${esc(s.content||'')}</div>`).join('<hr style="border:none;border-top:1px solid var(--bd);margin:12px 0">')}
+        <div class="tdetail-more" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('span:last-child').textContent=this.nextElementSibling.classList.contains('open')?'∨':'›'">
+          <span>💬 AI 回复</span><span>›</span>
+        </div>
+        <div class="tdetail-extra">
+          ${textResults.map(s => `<div style="font-size:13px;line-height:1.7;color:var(--tx);white-space:pre-wrap;word-break:break-word">${esc(s.content||'')}</div>`).join('<hr style="border:none;border-top:1px solid var(--bd);margin:10px 0">')}
+        </div>
       </div>` : '';
 
     el.innerHTML = `
@@ -3064,12 +3068,13 @@ async function openRunDetail(runId) {
         <div style="font-size:15px;font-weight:600;margin-bottom:14px;line-height:1.5;color:var(--tx)">${esc(r.goal||'')}</div>
         ${moreHtml}
       </div>
-      ${textResultHtml}
       ${extractedHtml}
-      <div class="card" style="margin-bottom:80px">
+      <div class="card" style="margin-bottom:12px">
         <div class="ctitle" style="margin-bottom:10px">执行步骤</div>
         <div style="display:flex;flex-direction:column;gap:6px">${stepsHtml}</div>
-      </div>`;
+      </div>
+      ${textResultHtml}
+      <div style="height:80px"></div>`;
   } catch(e) {
     el.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`;
   }
