@@ -49,9 +49,9 @@ async function runAgent({
     );
   } catch { /* 数据库不可用时继续 */ }
 
-  // 组装系统提示（人格层，含长期记忆 + 情节记忆）
+  // 组装系统提示（灵魂 + 天赋 + 技能专属指令 + 运行时状态 + 记忆）
   sendAndRecord({ type: 'step', step: 1, label: '人格层加载中...' });
-  const systemPrompt = await assembleSystemPrompt(userId, text);
+  const systemPrompt = await assembleSystemPrompt(userId, text, { intent });
 
   // 第一层处理完成，通知前端
   const gateway = isOpenClawConfigured() ? 'OpenClaw 网关' : '直连大模型';
