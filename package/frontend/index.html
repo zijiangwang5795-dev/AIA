@@ -3009,29 +3009,55 @@ async function openRunDetail(runId) {
       return `<div class="run-step"><span style="color:${color};margin-right:6px;font-size:13px">${icon}</span><span style="font-size:13px;color:var(--tx)">${esc(text)}</span><span style="color:var(--t3);font-size:11px;margin-left:auto">${s._t!=null?'+'+s._t+'ms':''}</span></div>`;
     }).join('') : '<div style="color:var(--t3);font-size:13px;padding:8px 0">暂无步骤日志</div>';
 
-    // 识别出的任务列表（仅任务识别类 run 才显示）
+    // 识别出的任务列表 — 按 assignTo 分两组展示
+    const userTodoTasks      = allExtracted.filter(t => t.assignTo === 'user');
+    const assistantTodoTasks = allExtracted.filter(t => t.assignTo !== 'user');
+
+    const renderTaskRow = (t, i, isUserGroup) => {
+      const taskInState = S.tasks.find(x => x.id == t.id);
+      const alreadyMoved = taskInState && taskInState.source === 'manual';
+      const tid  = esc(String(t.id || i));
+      const ttl  = esc(t.title || '');
+      const tpri = t.priority || 'med';
+      const tcat = esc(t.category || '通用');
+      const moveBtnHtml = (!isUserGroup && !alreadyMoved)
+        ? `<button onclick="moveToUserTodo('${tid}','${ttl.replace(/'/g,"\\'")}','${tpri}','${tcat.replace(/'/g,"\\'")}');this.replaceWith(Object.assign(document.createElement('span'),{className:'tag tg',style:'font-size:10px',textContent:'→ 已移入待办'}))" style="flex-shrink:0;padding:5px 11px;border-radius:20px;background:rgba(255,107,157,.12);border:1px solid rgba(255,107,157,.25);color:var(--pk);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">移入待办</button>`
+        : '';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;line-height:1.4">${ttl}</div>
+          <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+            ${ptag(tpri)}<span class="tag tc" style="font-size:10px">${tcat}</span>
+            ${t.deadline ? `<span class="tag" style="font-size:10px;background:rgba(100,200,100,.1);color:var(--ok)">🗓 ${esc(t.deadline)}</span>` : ''}
+          </div>
+        </div>
+        ${moveBtnHtml}
+      </div>`;
+    };
+
+    const userTodoBlock = userTodoTasks.length ? `
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--t2);letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block"></span>
+          您的待办 · ${userTodoTasks.length} 项
+        </div>
+        ${userTodoTasks.map((t, i) => renderTaskRow(t, i, true)).join('')}
+      </div>` : '';
+
+    const assistantTodoBlock = assistantTodoTasks.length ? `
+      <div style="margin-bottom:4px">
+        <div style="font-size:12px;font-weight:700;color:var(--t2);letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--ac);display:inline-block"></span>
+          助手待处理 · ${assistantTodoTasks.length} 项
+          <span style="font-size:10px;color:var(--t3);font-weight:400">（助手暂无对应工具，已记录）</span>
+        </div>
+        ${assistantTodoTasks.map((t, i) => renderTaskRow(t, i, false)).join('')}
+      </div>` : '';
+
     const extractedHtml = allExtracted.length ? `
       <div class="card" style="margin-bottom:12px">
-        <div class="ctitle" style="margin-bottom:12px">🎯 识别出的任务 · ${allExtracted.length} 项</div>
-        <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.6">以下任务已自动提取。助手可直接执行的任务已加入「我的任务」，其余请确认是否移入您的待办。</div>
-        ${allExtracted.map((t,i) => {
-          const taskInState = S.tasks.find(x => x.id == t.id);
-          const isUserTodo = taskInState && taskInState.source !== 'agent';
-          const tid = esc(String(t.id||i));
-          const ttl = esc(t.title||'');
-          const tpri = t.priority||'med';
-          const tcat = esc(t.category||'通用');
-          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:14px;font-weight:600;line-height:1.4">${ttl}</div>
-              <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-                ${ptag(tpri)}<span class="tag tc" style="font-size:10px">${tcat}</span>
-                ${isUserTodo ? '<span class="tag tg" style="font-size:10px">📋 待办</span>' : '<span class="tag tp" style="font-size:10px">🤖 我的任务</span>'}
-              </div>
-            </div>
-            ${isUserTodo ? '' : `<button onclick="moveToUserTodo('${tid}','${ttl.replace(/'/g,"\\'")}','${tpri}','${tcat.replace(/'/g,"\\'")}');this.closest('div[style]').querySelector('[data-badge]')?.remove();this.replaceWith(Object.assign(document.createElement('span'),{className:'tag tg',style:'font-size:10px',textContent:'→ 待办'}))" style="flex-shrink:0;padding:6px 12px;border-radius:20px;background:rgba(255,107,157,.12);border:1px solid rgba(255,107,157,.25);color:var(--pk);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">移入待办</button>`}
-          </div>`;
-        }).join('')}
+        <div class="ctitle" style="margin-bottom:14px">🎯 任务拆解结果 · ${allExtracted.length} 项</div>
+        ${userTodoBlock}${assistantTodoBlock}
       </div>` : '';
 
     // 更多信息（折叠）

@@ -63,7 +63,8 @@ const ROUTING_RULES = [
 // 注：客户端意图（client-*）不需要服务端工具；客户端技能定义由前端动态上报
 const SKILL_TOOL_MAP = {
   'ai-news':        ['web_search', 'create_tasks', 'save_memory'],
-  'analyze-voice':  ['create_tasks', 'memory_search', 'save_memory'],
+  // analyze-voice 携带全量工具：AI 按能力自行决定直接执行还是存待办
+  'analyze-voice':  ['create_tasks', 'send_friend_message', 'web_search', 'memory_search', 'save_memory'],
   'daily-brief':    ['memory_search', 'get_tasks'],
   'deep-analysis':  ['web_search', 'memory_search', 'calculator'],
   'client-alarm':   ['create_tasks'],   // 同时创建任务记录
