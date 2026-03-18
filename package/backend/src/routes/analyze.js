@@ -3,6 +3,7 @@ const { layer1Process } = require('../brain/layer1');
 const { runAgent } = require('../brain/layer2/agentExecutor');
 const { buildClientToolDefs } = require('../tools/registry');
 const { optionalAuth } = require('../auth/middleware');
+const { buildGoal } = require('../skills');
 const { checkQuota, incrementUsage } = require('../middleware/quota');
 
 module.exports = async function analyzeRoutes(app) {
@@ -148,17 +149,5 @@ module.exports = async function analyzeRoutes(app) {
   });
 };
 
-// 根据技能类型构建 Goal 文本
-function buildSkillGoal(skill, input) {
-  const today = new Date().toLocaleDateString('zh-CN');
-  switch (skill.builtin_type) {
-    case 'ai-news':
-      return `搜索整理今天（${today}）最重要的前10条AI行业新闻，按影响力排序，最后调用 create_tasks 生成任务清单`;
-    case 'daily-brief':
-      return `根据用户今日任务清单，生成简洁的工作日报，总结完成情况和未完成任务`;
-    case 'analyze-voice':
-      return `分析以下内容，提取所有任务和待办事项，调用 create_tasks 写入清单：\n${input || ''}`;
-    default:
-      return input || skill.description || skill.name;
-  }
-}
+// buildSkillGoal 已迁移至 src/skills/index.js#buildGoal，此处保留别名兼容调用处
+const buildSkillGoal = buildGoal;

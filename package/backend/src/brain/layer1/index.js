@@ -82,8 +82,8 @@ const ROUTING_RULES = [
     name: 'needs-web-search',
     priority: 10,
     match: (ctx) => ctx.tools?.includes('web_search') || ctx.intent === 'web-search' || ctx.intent === 'ai-news',
-    model: 'gpt-4o-mini',
-    fallbackModel: 'deepseek-chat',
+    model: 'deepseek-chat',
+    fallbackModel: 'gpt-4o-mini',
     reason: '需要联网搜索',
   },
   {
