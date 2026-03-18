@@ -45,9 +45,10 @@ function resolveApiKey(model) {
 // 辅助：获取当前有效的 AI Base URL（runtimeConfig 优先）
 function resolveBaseUrl(model) {
   if (_cfg.aiBaseUrl) return _cfg.aiBaseUrl;
-  if (!model) return 'https://api.openai.com';
+  if (!model) return undefined;  // 让 OpenAI SDK 使用默认值
   if (model.startsWith('deepseek')) return 'https://api.deepseek.com';
-  return 'https://api.openai.com';
+  if (model.startsWith('claude'))   return undefined;  // Anthropic SDK，不用 baseURL
+  return undefined;  // OpenAI 原生 SDK 默认 api.openai.com
 }
 
 module.exports = { getRuntimeConfig, setRuntimeConfig, resolveApiKey, resolveBaseUrl };

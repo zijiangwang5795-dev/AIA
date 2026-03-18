@@ -25,6 +25,10 @@ function isModelAvailable(model) {
   const { isOpenClawConfigured } = require('../openclaw/client');
   if (isOpenClawConfigured()) return true;
 
+  // 运行时 aiApiKey 覆盖 → 所有模型均可用（直连任意 endpoint）
+  const { getRuntimeConfig } = require('../../config/runtime');
+  if (getRuntimeConfig().aiApiKey) return true;
+
   const envKey = MODEL_KEY_MAP[model];
   if (!envKey) return false;
 
