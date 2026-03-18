@@ -26,6 +26,10 @@ const app = Fastify({
 
 // ── 安全响应头（helmet）──────────────────────────────
 // 生产环境开启严格模式；开发环境适当放宽（调试 inline scripts 等）
+// FORCE_HTTPS=true 时才下发 HSTS header，否则浏览器会把后续请求强制升级为 https
+// Demo / 局域网 HTTP 部署时务必保持 false（默认值）
+const forceHttps = process.env.FORCE_HTTPS === 'true';
+
 app.register(require('@fastify/helmet'), {
   contentSecurityPolicy: isProd ? {
     directives: {
@@ -41,6 +45,8 @@ app.register(require('@fastify/helmet'), {
       objectSrc:      ["'none'"],
     },
   } : false,
+  // HSTS 只在明确配置 FORCE_HTTPS=true 时开启，避免 HTTP 部署时浏览器缓存升级策略
+  hsts: forceHttps ? { maxAge: 31536000, includeSubDomains: true } : false,
   crossOriginEmbedderPolicy: false,   // 避免破坏字体等跨域资源
 });
 
