@@ -294,6 +294,42 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_ext ON user_subscriptions(external_
 
 -- messages：sender_type 过滤（查询助手代发消息）
 CREATE INDEX IF NOT EXISTS idx_messages_sender_type ON messages(to_user_id, sender_type, created_at DESC);
+
+-- ── 群组功能 ──────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS groups (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        VARCHAR(100) NOT NULL,
+  emoji       VARCHAR(10) DEFAULT '👥',
+  description TEXT,
+  creator_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id   UUID REFERENCES groups(id) ON DELETE CASCADE,
+  user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+  role       VARCHAR(20) DEFAULT 'member',
+  joined_at  TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (group_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS group_messages (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id     UUID REFERENCES groups(id) ON DELETE CASCADE,
+  from_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  content      TEXT NOT NULL,
+  sender_name  VARCHAR(100),
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── 执行记录增强 ───────────────────────────────────────
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS skill_name TEXT;
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS run_steps  JSONB DEFAULT '[]'::jsonb;
+
+-- ── 新增索引 ───────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_agent_runs_user    ON agent_runs(user_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_group_messages_grp ON group_messages(group_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
 `;
 
 async function migrate() {

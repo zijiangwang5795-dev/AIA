@@ -101,6 +101,8 @@ app.register(require('./routes/billing'),  { prefix: '/api' });
 app.register(require('./routes/feedback'), { prefix: '/api' });
 app.register(require('./routes/push'),     { prefix: '/api' });
 app.register(require('./routes/openclaw'), { prefix: '/api/openclaw' });
+app.register(require('./routes/groups'),   { prefix: '/api' });
+app.register(require('./routes/runs'),     { prefix: '/api' });
 app.register(require('./routes/admin'),    { prefix: '/admin' });
 
 // ── 静态前端 ──────────────────────────────────────────

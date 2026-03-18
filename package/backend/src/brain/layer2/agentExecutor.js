@@ -24,6 +24,7 @@ const { getRuntimeConfig } = require('../../config/runtime');
 async function runAgent({
   userId, text, toolNames, model, routingRule, intent, send,
   clientToolDefs = [], clientToolNames = new Set(),
+  skillId = null, skillName = null,
 }) {
   const runId    = `run_${uuid().slice(0, 8)}`;
   const MAX_STEPS = 8;
@@ -31,22 +32,30 @@ async function runAgent({
   let totalInputTokens  = 0;
   let totalOutputTokens = 0;
   const startTime = Date.now();
+  // 收集步骤事件（tool_start/tool_done/step/error 类型）
+  const runSteps = [];
+  const sendAndRecord = (data) => {
+    send(data);
+    if (['step', 'tool_start', 'tool_done', 'client_action', 'error', 'done'].includes(data.type)) {
+      runSteps.push({ ...data, _t: Date.now() - startTime });
+    }
+  };
 
   // 记录运行开始
   try {
     await query(
-      `INSERT INTO agent_runs (run_id, user_id, goal, status) VALUES ($1,$2,$3,'running')`,
-      [runId, userId, text]
+      `INSERT INTO agent_runs (run_id, user_id, goal, status, skill_name) VALUES ($1,$2,$3,'running',$4)`,
+      [runId, userId, text, skillName || null]
     );
   } catch { /* 数据库不可用时继续 */ }
 
   // 组装系统提示（人格层，含长期记忆 + 情节记忆）
-  send({ type: 'step', step: 1, label: '人格层加载中...' });
+  sendAndRecord({ type: 'step', step: 1, label: '人格层加载中...' });
   const systemPrompt = await assembleSystemPrompt(userId, text);
 
   // 第一层处理完成，通知前端
   const gateway = isOpenClawConfigured() ? 'OpenClaw 网关' : '直连大模型';
-  send({ type: 'step', step: 2, label: `意图：${intent}，模型：${model}，路由：${gateway}` });
+  sendAndRecord({ type: 'step', step: 2, label: `意图：${intent}，模型：${model}，路由：${gateway}` });
 
   // 获取工具定义（服务端工具 + 客户端上报的本地技能）
   const tools = [
@@ -59,7 +68,7 @@ async function runAgent({
 
   // ── ReAct 循环（通过 OpenClaw 网关调用 AI）──────────
   for (let step = 0; step < MAX_STEPS; step++) {
-    send({ type: 'step', step: step + 3, label: `第 ${step + 1} 轮推理（OpenClaw）...` });
+    sendAndRecord({ type: 'step', step: step + 3, label: `第 ${step + 1} 轮推理（OpenClaw）...` });
 
     // 使用运行时配置覆盖模型（调试用）
     const rt = getRuntimeConfig();
@@ -100,12 +109,12 @@ async function runAgent({
       let parsedArgs = {};
       try { parsedArgs = JSON.parse(tc.args); } catch { parsedArgs = {}; }
 
-      send({ type: 'tool_start', name: tc.name, args: parsedArgs });
+      sendAndRecord({ type: 'tool_start', name: tc.name, args: parsedArgs });
 
       let toolResult;
       if (clientToolNames.has(tc.name)) {
         // 客户端技能：下发给前端执行（闹钟、日历、电话等）
-        send({ type: 'client_action', name: tc.name, args: parsedArgs });
+        sendAndRecord({ type: 'client_action', name: tc.name, args: parsedArgs });
         toolResult = { dispatched: true, message: `指令已下发至客户端执行：${tc.name}` };
       } else {
         try {
@@ -115,7 +124,7 @@ async function runAgent({
         }
       }
 
-      send({ type: 'tool_done', name: tc.name, result: toolResult });
+      sendAndRecord({ type: 'tool_done', name: tc.name, result: toolResult });
 
       // 任务提取事件
       if (tc.name === 'create_tasks' && toolResult.tasks) {
@@ -144,7 +153,7 @@ async function runAgent({
   const c = COST[model] || { i: 0.0001, o: 0.0002 };
   const costUsd = (totalInputTokens * c.i + totalOutputTokens * c.o) / 1000;
 
-  // 写审计日志
+  // 写审计日志 + 保存步骤快照
   try {
     await query(
       `INSERT INTO ai_audit_logs
@@ -153,15 +162,15 @@ async function runAgent({
       [userId, runId, model, routingRule, intent, totalInputTokens, totalOutputTokens, totalLatency, costUsd]
     );
     await query(
-      `UPDATE agent_runs SET status='done', total_steps=$1, completed_at=NOW() WHERE run_id=$2`,
-      [messages.length, runId]
+      `UPDATE agent_runs SET status='done', total_steps=$1, completed_at=NOW(), run_steps=$2::jsonb WHERE run_id=$3`,
+      [messages.length, JSON.stringify(runSteps), runId]
     );
   } catch { /* 数据库不可用 */ }
 
   // 异步摘要到情节记忆（也经 OpenClaw）
   setImmediate(() => summarizeToEpisodic(runId, userId, messages).catch(() => {}));
 
-  send({
+  sendAndRecord({
     type:        'done',
     runId,
     totalTokens: totalInputTokens + totalOutputTokens,
