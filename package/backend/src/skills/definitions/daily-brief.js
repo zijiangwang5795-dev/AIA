@@ -9,6 +9,7 @@ module.exports = {
   emoji:        '📊',
   description:  '根据今日任务生成工作日报',
   builtin_type: 'daily-brief',
+  goal:         '根据用户今日任务清单，生成简洁的工作日报，总结完成情况和未完成任务',
   allowed_tools: ['memory_search', 'get_tasks'],
   layer1_tools:  ['memory_search', 'get_tasks'],
 };

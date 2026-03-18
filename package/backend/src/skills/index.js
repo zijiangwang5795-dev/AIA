@@ -51,4 +51,21 @@ async function seedBuiltinSkills(query) {
   }
 }
 
-module.exports = { SKILL_DEFS, SKILL_TOOL_MAP, seedBuiltinSkills };
+// def 查找表：builtin_type → 定义对象
+const SKILL_DEF_MAP = Object.fromEntries(SKILL_DEFS.map(d => [d.builtin_type, d]));
+
+/**
+ * 根据技能定义构建执行 goal 文本。
+ * 定义文件中 goal 可以是字符串或函数 (input, today) => string。
+ * 若未定义 goal，则回退到 input / description / name。
+ */
+function buildGoal(skill, input) {
+  const today = new Date().toLocaleDateString('zh-CN');
+  const def   = SKILL_DEF_MAP[skill.builtin_type];
+  if (!def) return input || skill.description || skill.name;
+  if (typeof def.goal === 'function') return def.goal(input, today);
+  if (typeof def.goal === 'string')   return def.goal;
+  return input || skill.description || skill.name;
+}
+
+module.exports = { SKILL_DEFS, SKILL_TOOL_MAP, seedBuiltinSkills, buildGoal };
