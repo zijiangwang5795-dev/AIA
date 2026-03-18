@@ -806,16 +806,17 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
       <div class="pghead">
         <div>
           <div class="pgtitle" id="taskPageTitle">我的任务</div>
-          <div class="pgsub" id="tsub">3 项待处理</div>
+          <div class="pgsub" id="tsub">加载中...</div>
         </div>
-        <button class="btn bp" onclick="showAdd()" style="padding:10px 16px;font-size:13px">+ 新建</button>
+        <!-- 仅 您的待办 标签下显示新建按钮 -->
+        <button class="btn bp" id="taskAddBtn" onclick="showAdd()" style="padding:10px 16px;font-size:13px;display:none">+ 新建</button>
       </div>
       <!-- 任务分类标签 -->
       <div class="task-tabs">
         <div class="ttab active" id="ttab-agent" onclick="switchTaskTab('agent',this)">🤖 我的任务</div>
         <div class="ttab" id="ttab-user" onclick="switchTaskTab('user',this)">📋 您的待办</div>
       </div>
-      <div class="card" id="addTaskCard">
+      <div class="card" id="addTaskCard" style="display:none">
         <div class="ctitle">新建待办</div>
         <div class="istack">
           <input class="inp" id="newT" placeholder="待办标题">
@@ -831,7 +832,7 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
           </div>
         </div>
       </div>
-      <div class="card" style="margin-bottom:80px"><div id="taskList"></div></div>
+      <div id="taskListCard" style="margin-bottom:80px"><div id="taskList"></div></div>
     </div>
 
     <!-- ═══ SKILLS ═══ -->
@@ -994,7 +995,7 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
 
     <!-- ═══ RUN DETAIL PAGE ═══ -->
     <div class="page" id="page-run-detail">
-      <div class="subpage-back" onclick="gsp('agent')">‹ 执行记录</div>
+      <div class="subpage-back" onclick="gp('tasks')">‹ 我的任务</div>
       <div class="pad" style="padding-top:12px;padding-bottom:80px">
         <div id="runDetailContent">
           <div class="empty-state"><div class="ei">⏳</div><p>加载中...</p></div>
@@ -1521,9 +1522,9 @@ textarea.inp{resize:none;min-height:100px;line-height:1.6}
   <!-- BOTTOM NAV -->
   <div class="botnav">
     <div class="nb active" id="nb-home" onclick="gp('home')"><div class="ni">🏠</div><div class="nl">主页</div></div>
-    <div class="nb" id="nb-tasks" onclick="gp('tasks')"><div class="ni">✅</div><div class="nl">任务</div><div class="nbadge" id="tbadge">3</div></div>
+    <div class="nb" id="nb-tasks" onclick="gp('tasks')"><div class="ni">✅</div><div class="nl">任务</div><div class="nbadge" id="tbadge">0</div></div>
     <div class="nb" id="nb-friends" onclick="gp('friends')"><div class="ni">👥</div><div class="nl">好友</div><div class="nbadge" id="fbadge" style="display:none">1</div></div>
-    <div class="nb" id="nb-timeline" onclick="gp('agent');rTimeline()"><div class="ni">🤖</div><div class="nl">动态</div></div>
+    <div class="nb" id="nb-skills" onclick="gp('skills')"><div class="ni">⚡</div><div class="nl">技能</div></div>
     <div class="nb" id="nb-more" onclick="gp('more')"><div class="ni">⋯</div><div class="nl">更多</div></div>
   </div>
 
@@ -1746,7 +1747,7 @@ function updateGreeting(){
 }
 
 // ══════════════════ NAV
-const ROOT_PG=['home','tasks','friends','market','more'];
+const ROOT_PG=['home','tasks','friends','skills','market','more'];
 const FRIEND_PGS=['chat','friend-profile','privacy','group-chat'];
 const SKILL_PGS=['voice','skill-run'];
 const TIMELINE_PGS=['agent','run-detail'];
@@ -1757,10 +1758,10 @@ function gp(pg){
   if(el)el.classList.add('active');
   let nbKey;
   if(ROOT_PG.includes(pg)) nbKey=pg;
-  else if(['mdetail','publish'].includes(pg)) nbKey='more'; // market moved to more
+  else if(['mdetail','publish'].includes(pg)) nbKey='more';
   else if(FRIEND_PGS.includes(pg)) nbKey='friends';
-  else if(SKILL_PGS.includes(pg)) nbKey='home';
-  else if(TIMELINE_PGS.includes(pg)) nbKey='timeline';
+  else if(SKILL_PGS.includes(pg)) nbKey='skills';
+  else if(TIMELINE_PGS.includes(pg)) nbKey='tasks'; // run-detail opens from tasks
   else nbKey='more';
   const nb=document.getElementById(`nb-${nbKey}`);
   if(nb)nb.classList.add('active');
@@ -2567,39 +2568,111 @@ function confirmT() {
 }
 
 // ══════════════════ TASKS UI
+// rtasks 根据当前 tab 分支渲染
 function rtasks() {
-  // 按当前 tab 过滤
-  const isAgentTab = currentTaskTab === 'agent';
-  const filtered = S.tasks.filter(t => isAgentTab ? t.source === 'agent' : t.source !== 'agent');
-  const pd = filtered.filter(t => t.status === 'pending').length;
-  const total = S.tasks.filter(t => t.status === 'pending').length;
-  document.getElementById('tsub').textContent = isAgentTab
-    ? `${pd} 项运行中 · 共 ${filtered.length} 项`
-    : `${pd} 项待处理 · 共 ${filtered.length} 项`;
-  document.getElementById('tbadge').textContent = total;
+  if (currentTaskTab === 'agent') {
+    loadAndRenderMyTasks();
+  } else {
+    renderUserTodos();
+  }
+}
 
-  if (!filtered.length) {
-    const emptyMsg = isAgentTab
-      ? '<div class="empty-state"><div class="ei">🤖</div><p>暂无助手任务<br>点击技能让助手开始工作</p></div>'
-      : '<div class="empty-state"><div class="ei">📋</div><p>暂无待办事项<br>点击右上角「新建」添加</p></div>';
-    document.getElementById('taskList').innerHTML = emptyMsg;
+// 「我的任务」— 加载并渲染 agent_runs（助手执行记录）
+async function loadAndRenderMyTasks() {
+  const card = document.getElementById('taskListCard');
+  const list = document.getElementById('taskList');
+  card.className = 'card'; card.style.marginBottom = '80px';
+  list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t2)">加载中...</div>';
+  const pending = S.tasks.filter(t => t.status === 'pending').length;
+  document.getElementById('tbadge').textContent = pending;
+
+  if (!Auth.token) {
+    list.innerHTML = '<div class="empty-state"><div class="ei">🔒</div><p>请先登录</p></div>';
+    document.getElementById('tsub').textContent = '未登录';
     return;
   }
+  try {
+    const data = await apiCall('GET', '/api/runs?limit=40');
+    const runs = data.runs || [];
+    document.getElementById('tsub').textContent = runs.length ? `${runs.length} 条记录` : '暂无记录';
+    if (!runs.length) {
+      list.innerHTML = '<div class="empty-state"><div class="ei">🤖</div><p>助手还没执行过任务<br>去「技能」页面让助手开始工作</p></div>';
+      return;
+    }
+    list.innerHTML = runs.map(r => {
+      const sc = r.status === 'done' ? 'var(--ok)' : r.status === 'failed' ? 'var(--er)' : 'var(--wn)';
+      const si = r.status === 'done' ? '✅' : r.status === 'failed' ? '❌' : '⏳';
+      const ts = r.startedAt ? new Date(r.startedAt).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+      const dur = r.durationMs ? `${(r.durationMs/1000).toFixed(1)}s` : '';
+      const skillTag = r.skillName ? `<span class="tag tp" style="font-size:10px">⚡ ${esc(r.skillName)}</span>` : `<span class="tag" style="background:rgba(124,111,255,.1);color:var(--ac);font-size:10px">🎯 任务识别</span>`;
+      const taskBadge = r.taskCount > 0 ? `<span class="tag tg" style="font-size:10px">${r.taskCount} 项任务</span>` : '';
+      const bgIc = r.skillName ? '⚡' : '🎯';
+      const bgCol = r.skillName ? 'rgba(124,111,255,.12)' : 'rgba(61,255,160,.1)';
+      return `<div class="titem" onclick="openRunDetail('${esc(r.runId)}')">
+        <div style="width:40px;height:40px;border-radius:12px;background:${bgCol};display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${bgIc}</div>
+        <div style="flex:1;min-width:0">
+          <div class="ttitle" style="font-size:14px">${esc((r.goal||r.skillName||'').slice(0,45))}</div>
+          <div class="tmeta">
+            <span style="color:${sc};font-size:11px;font-weight:700">${si}</span>
+            ${skillTag}
+            ${taskBadge}
+            <span style="color:var(--t3);font-size:11px">${ts}</span>
+            ${dur?`<span style="color:var(--t3);font-size:11px">${dur}</span>`:''}
+          </div>
+        </div>
+        <div style="color:var(--t3);font-size:18px;flex-shrink:0">›</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`;
+    document.getElementById('tsub').textContent = '加载失败';
+  }
+}
 
-  document.getElementById('taskList').innerHTML = filtered.map(t => `
+// 「您的待办」— 渲染用户手动/语音任务
+function renderUserTodos() {
+  const card = document.getElementById('taskListCard');
+  card.className = 'card'; card.style.marginBottom = '80px';
+  const userTasks = S.tasks.filter(t => t.source !== 'agent');
+  const pd = userTasks.filter(t => t.status === 'pending').length;
+  const total = S.tasks.filter(t => t.status === 'pending').length;
+  document.getElementById('tsub').textContent = `${pd} 项待处理 · 共 ${userTasks.length} 项`;
+  document.getElementById('tbadge').textContent = total;
+  if (!userTasks.length) {
+    document.getElementById('taskList').innerHTML = '<div class="empty-state"><div class="ei">📋</div><p>暂无待办事项<br>点击右上角「+ 新建」添加</p></div>';
+    return;
+  }
+  document.getElementById('taskList').innerHTML = userTasks.map(t => `
     <div class="titem" onclick="openTaskDetail('${t.id}')">
-      <div class="tck ${t.status === 'done' ? 'done' : ''}" onclick="event.stopPropagation();togT('${t.id}')">${t.status === 'done' ? '✓' : ''}</div>
+      <div class="tck ${t.status==='done'?'done':''}" onclick="event.stopPropagation();togT('${t.id}')">${t.status==='done'?'✓':''}</div>
       <div style="flex:1">
-        <div class="ttitle ${t.status === 'done' ? 'done' : ''}">${esc(t.title)}</div>
+        <div class="ttitle ${t.status==='done'?'done':''}">${esc(t.title)}</div>
         <div class="tmeta">
           ${ptag(t.priority)}
-          <span class="tag tc">${esc(t.category || '通用')}</span>
-          ${t.deadline ? `<span class="tag ty">⏰ ${esc(t.deadline)}</span>` : ''}
-          ${t.run_id ? '<span class="tag" style="background:rgba(61,255,212,.1);color:var(--cy)">有记录</span>' : ''}
+          <span class="tag tc">${esc(t.category||'通用')}</span>
+          ${t.deadline?`<span class="tag ty">⏰ ${esc(t.deadline)}</span>`:''}
+          <span class="tag" style="background:var(--s3);color:var(--t3);font-size:10px">${t.source==='voice'?'🎙️ 语音':'✍️ 手动'}</span>
         </div>
       </div>
       <button class="delbtn" onclick="event.stopPropagation();delT('${t.id}')">×</button>
     </div>`).join('');
+}
+
+// 将一个任务移入「您的待办」（改变来源标记为 manual）
+async function moveToUserTodo(taskId, title, priority, category) {
+  try {
+    // 尝试在后端更新 source（若后端支持），否则本地新建
+    let existing = S.tasks.find(t => t.id == taskId);
+    if (existing) {
+      existing.source = 'manual';
+    } else {
+      const res = await apiCall('POST', '/api/tasks', { title, priority: priority||'med', category: category||'通用', source: 'manual' });
+      const created = res.created?.[0] || { title, priority: priority||'med', category: category||'通用', id: Date.now(), status:'pending', source:'manual' };
+      S.tasks.unshift({ ...created, status:'pending', source:'manual' });
+    }
+    toast(`「${title.slice(0,16)}」已加入待办`, 'success');
+    rtasks();
+  } catch(e) { toast(e.message,'error'); }
 }
 
 async function togT(id) {
@@ -2899,7 +2972,7 @@ async function rTimeline() {
 }
 
 async function openRunDetail(runId) {
-  gsp('run-detail');
+  gp('run-detail');
   const el = document.getElementById('runDetailContent');
   el.innerHTML = '<div style="text-align:center;padding:32px;color:var(--t2)">加载中...</div>';
   try {
@@ -2908,50 +2981,81 @@ async function openRunDetail(runId) {
     const statusLabel = r.status === 'done' ? '已完成' : r.status === 'failed' ? '无法处理' : '进行中';
     const dur = r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : '—';
     const steps = r.steps || [];
+
+    // 从 steps 中提取 task_extract 输出的任务列表
+    const extractedTasks = steps
+      .filter(s => s.type === 'tool_done' && s.name === 'create_tasks' && s.result?.created)
+      .flatMap(s => s.result.created || []);
+    // 也兼容旧的 task_extract 事件格式
+    const taskExtractStep = steps.find(s => s.type === 'task_extract');
+    const allExtracted = extractedTasks.length ? extractedTasks : (taskExtractStep?.tasks || []);
+
     const stepsHtml = steps.length ? steps.map(s => {
       let icon = '▸', color = 'var(--t2)', text = '';
-      if (s.type === 'step')         { icon = '🔀'; color = 'var(--ac)'; text = s.label || ''; }
-      else if (s.type === 'tool_start') { icon = '⚙️'; color = 'var(--cy)'; text = `调用 ${s.name}(${JSON.stringify(s.args || {}).slice(0, 60)})`; }
+      if (s.type === 'step')            { icon = '🔀'; color = 'var(--ac)'; text = s.label || ''; }
+      else if (s.type === 'tool_start') { icon = '⚙️'; color = 'var(--cy)'; text = `调用 ${s.name}(${JSON.stringify(s.args||{}).slice(0,60)})`; }
       else if (s.type === 'tool_done')  { icon = '✓';  color = 'var(--ok)'; text = `${s.name} 完成`; }
-      else if (s.type === 'client_action') { icon = '📲'; color = 'var(--pk)'; text = `下发客户端：${s.name}`; }
-      else if (s.type === 'error')    { icon = '❌'; color = 'var(--er)'; text = s.message || ''; }
+      else if (s.type === 'client_action'){ icon='📲'; color='var(--pk)'; text=`下发客户端：${s.name}`; }
+      else if (s.type === 'error')      { icon = '❌'; color = 'var(--er)'; text = s.message||''; }
       else return '';
-      return `<div class="run-step"><span style="color:${color};margin-right:6px;font-size:13px">${icon}</span><span style="font-size:13px;color:var(--tx)">${esc(text)}</span><span style="color:var(--t3);font-size:11px;margin-left:auto">${s._t != null ? '+' + s._t + 'ms' : ''}</span></div>`;
+      return `<div class="run-step"><span style="color:${color};margin-right:6px;font-size:13px">${icon}</span><span style="font-size:13px;color:var(--tx)">${esc(text)}</span><span style="color:var(--t3);font-size:11px;margin-left:auto">${s._t!=null?'+'+s._t+'ms':''}</span></div>`;
     }).join('') : '<div style="color:var(--t3);font-size:13px;padding:8px 0">暂无步骤日志</div>';
+
+    // 识别出的任务列表（仅任务识别类 run 才显示）
+    const extractedHtml = allExtracted.length ? `
+      <div class="card" style="margin-bottom:12px">
+        <div class="ctitle" style="margin-bottom:12px">🎯 识别出的任务 · ${allExtracted.length} 项</div>
+        <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.6">以下任务已自动提取。助手可直接执行的任务已加入「我的任务」，其余请确认是否移入您的待办。</div>
+        ${allExtracted.map((t,i) => {
+          const taskInState = S.tasks.find(x => x.id == t.id);
+          const isUserTodo = taskInState && taskInState.source !== 'agent';
+          const tid = esc(String(t.id||i));
+          const ttl = esc(t.title||'');
+          const tpri = t.priority||'med';
+          const tcat = esc(t.category||'通用');
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600;line-height:1.4">${ttl}</div>
+              <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+                ${ptag(tpri)}<span class="tag tc" style="font-size:10px">${tcat}</span>
+                ${isUserTodo ? '<span class="tag tg" style="font-size:10px">📋 待办</span>' : '<span class="tag tp" style="font-size:10px">🤖 我的任务</span>'}
+              </div>
+            </div>
+            ${isUserTodo ? '' : `<button onclick="moveToUserTodo('${tid}','${ttl.replace(/'/g,"\\'")}','${tpri}','${tcat.replace(/'/g,"\\'")}');this.closest('div[style]').querySelector('[data-badge]')?.remove();this.replaceWith(Object.assign(document.createElement('span'),{className:'tag tg',style:'font-size:10px',textContent:'→ 待办'}))" style="flex-shrink:0;padding:6px 12px;border-radius:20px;background:rgba(255,107,157,.12);border:1px solid rgba(255,107,157,.25);color:var(--pk);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">移入待办</button>`}
+          </div>`;
+        }).join('')}
+      </div>` : '';
+
+    // 更多信息（折叠）
+    const moreHtml = `
+      <div class="tdetail-more" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('span:last-child').textContent=this.nextElementSibling.classList.contains('open')?'∨':'›'">
+        <span>更多信息</span><span>›</span>
+      </div>
+      <div class="tdetail-extra">
+        <div><b>Run ID：</b><span style="font-family:monospace;font-size:11px">${esc(runId)}</span></div>
+        <div><b>模型：</b>${esc(r.model||'—')}</div>
+        <div><b>耗时：</b>${dur}</div>
+        <div><b>Token：</b>${r.tokens?.total||0}</div>
+        <div><b>费用：</b>$${r.costUsd?r.costUsd.toFixed(5):'0'}</div>
+      </div>`;
 
     el.innerHTML = `
       <div class="card" style="margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-          <span style="color:${statusColor};font-size:20px">${r.status === 'done' ? '✅' : r.status === 'failed' ? '❌' : '⏳'}</span>
-          <span style="font-weight:700;color:${statusColor}">${statusLabel}</span>
-          ${r.skillName ? `<span class="tag tp">⚡ ${esc(r.skillName)}</span>` : ''}
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="color:${statusColor};font-size:20px">${r.status==='done'?'✅':r.status==='failed'?'❌':'⏳'}</span>
+          <span style="font-weight:700;color:${statusColor};font-size:15px">${statusLabel}</span>
+          ${r.skillName?`<span class="tag tp">⚡ ${esc(r.skillName)}</span>`:'<span class="tag" style="background:rgba(124,111,255,.1);color:var(--ac)">🎯 任务识别</span>'}
         </div>
-        <div style="font-size:15px;font-weight:600;margin-bottom:12px;line-height:1.5;color:var(--tx)">${esc(r.goal || '')}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div style="background:var(--s3);border-radius:10px;padding:10px 12px">
-            <div style="font-size:11px;color:var(--t3);margin-bottom:2px">耗时</div>
-            <div style="font-size:16px;font-weight:700">${dur}</div>
-          </div>
-          <div style="background:var(--s3);border-radius:10px;padding:10px 12px">
-            <div style="font-size:11px;color:var(--t3);margin-bottom:2px">Token</div>
-            <div style="font-size:16px;font-weight:700">${r.tokens?.total || 0}</div>
-          </div>
-          <div style="background:var(--s3);border-radius:10px;padding:10px 12px">
-            <div style="font-size:11px;color:var(--t3);margin-bottom:2px">模型</div>
-            <div style="font-size:13px;font-weight:600">${r.model || '—'}</div>
-          </div>
-          <div style="background:var(--s3);border-radius:10px;padding:10px 12px">
-            <div style="font-size:11px;color:var(--t3);margin-bottom:2px">费用</div>
-            <div style="font-size:16px;font-weight:700">$${r.costUsd ? r.costUsd.toFixed(5) : '0'}</div>
-          </div>
-        </div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:14px;line-height:1.5;color:var(--tx)">${esc(r.goal||'')}</div>
+        ${moreHtml}
       </div>
-      <div class="card">
+      ${extractedHtml}
+      <div class="card" style="margin-bottom:80px">
         <div class="ctitle" style="margin-bottom:10px">执行步骤</div>
         <div style="display:flex;flex-direction:column;gap:6px">${stepsHtml}</div>
       </div>`;
   } catch(e) {
-    el.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${e.message}</p></div>`;
+    el.innerHTML = `<div class="empty-state"><div class="ei">⚠️</div><p>${esc(e.message)}</p></div>`;
   }
 }
 
@@ -3968,7 +4072,7 @@ function toggleTheme() {
 }
 
 // ══════════════════ TASK TABS
-let currentTaskTab = 'agent'; // 'agent' = 我的任务, 'user' = 您的待办
+let currentTaskTab = 'agent'; // 'agent' = 我的任务(运行记录), 'user' = 您的待办
 
 function switchTaskTab(tab, el) {
   currentTaskTab = tab;
@@ -3976,10 +4080,12 @@ function switchTaskTab(tab, el) {
   if (tab === 'agent') {
     el.classList.add('active');
     document.getElementById('taskPageTitle').textContent = '我的任务';
+    document.getElementById('taskAddBtn').style.display = 'none';
     document.getElementById('addTaskCard').style.display = 'none';
   } else {
     el.classList.add('active-user');
     document.getElementById('taskPageTitle').textContent = '您的待办';
+    document.getElementById('taskAddBtn').style.display = '';
   }
   rtasks();
 }
@@ -4069,9 +4175,13 @@ async function renderRecentActivity() {
 
 // ══════════════════ DASHBOARD
 function rdash() {
-  const n = S.tasks.filter(t => t.status === 'pending').length;
-  document.getElementById('taskCount').textContent = n;
-  document.getElementById('tbadge').textContent = n;
+  // badge 显示用户待办数（您的待办）
+  const userPending = S.tasks.filter(t => t.source !== 'agent' && t.status === 'pending').length;
+  const allPending  = S.tasks.filter(t => t.status === 'pending').length;
+  document.getElementById('taskCount').textContent = allPending;
+  document.getElementById('tbadge').textContent = userPending || '';
+  const badge = document.getElementById('tbadge');
+  badge.style.display = userPending > 0 ? 'flex' : 'none';
   renderRecentActivity().catch(() => {});
 }
 
