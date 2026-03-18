@@ -1,5 +1,6 @@
 'use strict';
 const { query } = require('../../db/client');
+const { SKILL_TOOL_MAP: BUILTIN_SKILL_TOOL_MAP } = require('../../skills');
 
 // ── 模型 → 所需 ENV Key 映射 ──────────────────────────
 const MODEL_KEY_MAP = {
@@ -119,18 +120,17 @@ const ROUTING_RULES = [
 ];
 
 // ── 技能 → 工具映射 ──────────────────────────────────
+// 内置技能部分来自 src/skills/definitions/*.js（随文件自动加载）
+// 系统意图（client-* / deep-analysis / default）在此处单独维护
 const SKILL_TOOL_MAP = {
-  'ai-news':        ['web_search', 'create_tasks', 'save_memory'],
-  // analyze-voice 携带全量工具：AI 按能力自行决定直接执行还是存待办
-  'analyze-voice':  ['create_tasks', 'send_friend_message', 'web_search', 'memory_search', 'save_memory'],
-  'daily-brief':    ['memory_search', 'get_tasks'],
-  'deep-analysis':  ['web_search', 'memory_search', 'calculator'],
-  'client-alarm':   ['create_tasks'],
-  'client-calendar':['create_tasks'],
-  'client-call':    [],
-  'client-sms':     [],
-  'send-friend-message': ['send_friend_message', 'create_tasks', 'memory_search'],
-  'default':        ['create_tasks', 'memory_search'],
+  ...BUILTIN_SKILL_TOOL_MAP,
+  // 系统级意图（非独立技能文件，由 layer1 路由直接使用）
+  'deep-analysis':   ['web_search', 'memory_search', 'calculator'],
+  'client-alarm':    ['create_tasks'],
+  'client-calendar': ['create_tasks'],
+  'client-call':     [],
+  'client-sms':      [],
+  'default':         ['create_tasks', 'memory_search'],
 };
 
 // ── 第一层大脑主处理函数 ─────────────────────────────
