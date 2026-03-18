@@ -107,7 +107,7 @@ app.register(require('./routes/admin'),    { prefix: '/admin' });
 
 // ── 静态前端 ──────────────────────────────────────────
 app.register(require('@fastify/static'), {
-  root: path.join(__dirname, '../../frontend'),
+  root: path.join(__dirname, '../public'),
   prefix: '/',
   decorateReply: true,
   index: 'index.html',   // 根路径 / 直接返回 index.html

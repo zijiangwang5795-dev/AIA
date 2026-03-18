@@ -53,7 +53,7 @@ services:
       redis:
         condition: service_started
     volumes:
-      - ./public:/app/public  # 前端文件
+      - ../frontend:/app/public  # 前端文件（来自 package/frontend/）
     restart: unless-stopped
 
 volumes:
