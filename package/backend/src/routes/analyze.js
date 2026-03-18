@@ -119,11 +119,16 @@ module.exports = async function analyzeRoutes(app) {
         { skillType: skill.builtin_type || 'default' }
       );
 
+      const { isModelAvailable } = require('../brain/layer1');
+
       await runAgent({
         userId,
         text: buildSkillGoal(skill, input),
         toolNames: skill.allowed_tools || layer1.tools,
-        model: skill.model_pref || layer1.selectedModel,
+        // skill.model_pref 需通过 key 可用性检查，不可用则退回 layer1 路由结果
+        model: (skill.model_pref && isModelAvailable(skill.model_pref))
+          ? skill.model_pref
+          : layer1.selectedModel,
         routingRule: `skill:${skill.builtin_type}`,
         intent: skill.builtin_type || layer1.intent,
         skillId: skill.id,
